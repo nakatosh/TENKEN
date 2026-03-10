@@ -1,4 +1,3 @@
-
 // ===== IndexedDB helper (promise-style) =====
 const DB_NAME = 'inspectionPWA';
 const DB_VER = 1;
@@ -40,6 +39,9 @@ function idbGetAll(store){
 function idbPut(store, val){
   return new Promise((res, rej) => { const r = store.put(val); r.onsuccess=()=>res(); r.onerror=()=>rej(r.error); });
 }
+function idbDel(store, key){
+  return new Promise((res, rej) => { const r = store.delete(key); r.onsuccess=()=>res(); r.onerror=()=>rej(r.error); });
+}
 function idbClear(store){
   return new Promise((res, rej) => { const r = store.clear(); r.onsuccess=()=>res(); r.onerror=()=>rej(r.error); });
 }
@@ -52,8 +54,14 @@ function idbIndexGetAll(store, indexName, key){
 
 // ===== Utilities =====
 const todayStr = () => new Date().toISOString().slice(0,10);
-function hashId(str){ let h=0; for(let i=0;i<str.length;i++){ h=(h*31 + str.charCodeAt(i))|0; } return 'ID'+Math.abs(h); }
+const pad = n => n.toString().padStart(2,'0');
+function hashId(str){
+  // simple hash
+  let h=0; for(let i=0;i<str.length;i++){ h=(h*31 + str.charCodeAt(i))|0; }
+  return 'ID'+Math.abs(h);
+}
 function csvParse(text){
+  // RFC4180-ish CSV parser (handles "," quotes) and also converts Japanese comma '、' in options later
   const rows=[]; let i=0, field='', row=[], inQ=false;
   const pushField=()=>{ row.push(field); field=''; };
   const pushRow=()=>{ rows.push(row); row=[]; };
@@ -66,16 +74,19 @@ function csvParse(text){
     } else {
       if(c==='"') inQ=true;
       else if(c===',') pushField();
-      else if(c==='
-' || c===''){
-        if(c==='' && text[i+1]==='
-'){ i++; }
+      else if(c==='\n' || c==='\r'){
+        // handle CRLF/CR/LF
+        // finalize row only if not empty line
+        // but ensure if field or row has content
+        // skip extra CRLF
+        if(c==='\r' && text[i+1]==='\n'){ i++; }
         pushField();
         if(row.length>1 || (row.length===1 && row[0]!=='')) pushRow();
       } else { field+=c; }
     }
     i++;
   }
+  // last field
   if(field!=='' || row.length>0){ pushField(); pushRow(); }
   return rows;
 }
@@ -86,17 +97,30 @@ function downloadFile(filename, content, mime='text/plain;charset=utf-8'){
   a.href=url; a.download=filename; a.click();
   setTimeout(()=>URL.revokeObjectURL(url), 1000);
 }
-const palette = ['#ef4444','#f59e0b','#10b981','#3b82f6','#8b5cf6','#ec4899','#22d3ee','#84cc16','#fb923c','#06b6d4'];
-function colorForTypeCd(typeCd){ const n=parseInt(typeCd,10); if(Number.isNaN(n)) return '#3b82f6'; return palette[n % palette.length]; }
 
-// ===== App State & Navigation =====
-const state = { current: 'master' };
+// Color palette by typeCd
+const palette = ['#ef4444','#f59e0b','#10b981','#3b82f6','#8b5cf6','#ec4899','#22d3ee','#84cc16','#fb923c','#06b6d4'];
+function colorForTypeCd(typeCd){
+  const n = parseInt(typeCd,10);
+  if(Number.isNaN(n)) return '#3b82f6';
+  return palette[n % palette.length];
+}
+
+// ===== App State =====
+const state = {
+  current: 'master',
+  selectedType: null,
+  selectedDate: todayStr(),
+  status: 'all',
+  currentPlace: null,
+  currentTypeObj: null
+};
+
+// ===== Navigation =====
 function showScreen(name){
   state.current = name;
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.nav===name));
   document.querySelectorAll('main section').forEach(s=>s.classList.toggle('active', s.id === `screen-${name}`));
-  // 地図はフルスクリーンで表示（検索UI不要）
-  if(name==='map') document.body.classList.add('fullscreen-map'); else document.body.classList.remove('fullscreen-map');
   if(name==='list') refreshList();
   if(name==='map') renderMap();
   if(name==='master') renderTypeList();
@@ -107,6 +131,7 @@ async function importMaster(file){
   const text = await file.text();
   const rows = csvParse(text);
   if(rows.length<2) throw new Error('行がありません');
+  // header
   const header = rows[0].map(h=>h.trim());
   const idx = {
     typeCd: header.indexOf('点検種類CD'),
@@ -117,6 +142,7 @@ async function importMaster(file){
     opts: header.indexOf('選択肢')
   };
   if(Object.values(idx).some(v=>v===-1)) throw new Error('ヘッダが不正です');
+  // group by typeCd
   const map = new Map();
   for(let r=1;r<rows.length;r++){
     const row = rows[r];
@@ -125,6 +151,7 @@ async function importMaster(file){
     const typeName = (row[idx.typeName]||'').trim();
     const itemLabel = (row[idx.item]||'').trim();
     const inputCd = (row[idx.inputCd]||'').trim();
+    const inputName = (row[idx.inputName]||'').trim();
     const rawOpts = (row[idx.opts]||'').trim();
     if(!typeCd || !typeName || !itemLabel) continue;
     let inputType = 'text';
@@ -132,11 +159,7 @@ async function importMaster(file){
     else if(inputCd==='2') inputType='text';
     else if(inputCd==='3') inputType='select';
     else if(inputCd==='4') inputType='okng';
-    // OK/NG の表記ゆれ吸収（OKNG / OK,NG / OK、NG）
-    const rawUpper = rawOpts.toUpperCase().replace(/\s/g,'');
-    if(inputType!=='okng' && (rawUpper==='OKNG' || rawUpper==='OK,NG' || rawUpper==='OK、NG')){
-      inputType='okng';
-    }
+    // options split by comma or Japanese comma/読点
     let options = [];
     if(inputType==='select'){
       const replaced = rawOpts.replace(/、/g, ',');
@@ -162,6 +185,7 @@ async function renderTypeList(){
     li.textContent = `${t.typeCd}: ${t.typeName}（項目${t.items.length}件）`;
     ul.appendChild(li);
   });
+  // update filter selects
   populateTypeSelects(types);
 }
 function populateTypeSelects(types){
@@ -197,8 +221,14 @@ async function importPlaces(file){
     const typeCd = (row[idx.typeCd]||'').trim();
     if(!typeCd) continue;
     let lat=null, lng=null;
-    if(is4){ lat = (row[idx.lat]||'').trim(); lng = (row[idx.lng]||'').trim(); }
-    else { const combo = (row[idx.lat]||'').trim(); if(combo.includes(',')) [lat,lng] = combo.split(',').map(s=>s.trim()); else if(combo.includes(' ')) [lat,lng] = combo.split(' ').map(s=>s.trim()); }
+    if(is4){
+      lat = (row[idx.lat]||'').trim();
+      lng = (row[idx.lng]||'').trim();
+    } else {
+      const combo = (row[idx.lat]||'').trim();
+      if(combo.includes(',')) [lat,lng] = combo.split(',').map(s=>s.trim());
+      else if(combo.includes(' ')) [lat,lng] = combo.split(' ').map(s=>s.trim());
+    }
     const name = (row[idx.name]||'').trim();
     const placeId = hashId(`${typeCd}::${name}::${lat||''}::${lng||''}`);
     if(!lat || !lng){ warnings++; }
@@ -218,7 +248,10 @@ async function refreshList(){
   const dateInp = document.getElementById('filter-date');
   const statusSel = document.getElementById('filter-status');
   if(!dateInp.value) dateInp.value = todayStr();
-  if(!typeSel.value){ document.getElementById('list-tbody').innerHTML = '<tr><td colspan="4">点検種類を選択してください</td></tr>'; return; }
+  if(!typeSel.value){
+    document.getElementById('list-tbody').innerHTML = '<tr><td colspan="4">点検種類を選択してください</td></tr>';
+    return;
+  }
   const typeCd = typeSel.value;
   const date = dateInp.value;
   const places = (await idbIndexGetAll(txStore(db,'places'),'typeCd', typeCd))
@@ -236,47 +269,50 @@ async function refreshList(){
     tr.innerHTML = `<td>${p.name}</td><td>${coord}</td><td><span class="badge ${status==='submitted'?'complete':'pending'}">${status==='submitted'?'完了':'未完了'}</span></td>`;
     const tdOp = document.createElement('td');
     const btnGo = document.createElement('button'); btnGo.className='btn'; btnGo.textContent='点検入力';
-    btnGo.onclick = async ()=>{ const typeObj = (await idbGet(txStore(db,'types'), typeCd)); openForm(typeObj, p, date); };
-
-    const btnMap = document.createElement('button'); btnMap.className='btn info'; btnMap.textContent='地図で表示';
-    btnMap.onclick = ()=>{
-      document.getElementById('map-type').value = typeCd;
-      document.getElementById('map-date').value = date;
-      document.getElementById('map-status').value = statusSel.value;
-      document.body.classList.add('fullscreen-map');
-      showScreen('map'); renderMap(p);
+    btnGo.onclick = async ()=>{
+      const typeObj = (await idbGet(txStore(db,'types'), typeCd));
+      openForm(typeObj, p, date);
     };
+    const btnMap = document.createElement('button'); btnMap.className='btn'; btnMap.textContent='地図で表示';
+    btnMap.onclick = ()=>{ document.getElementById('map-type').value = typeCd; document.getElementById('map-date').value = date; document.getElementById('map-status').value = statusSel.value; showScreen('map'); renderMap(p); };
     tdOp.appendChild(btnGo); tdOp.appendChild(btnMap); tr.appendChild(tdOp);
     tbody.appendChild(tr);
   }
 }
 
 // ===== Map =====
-let mapObj = null; let mapLayer = null;
+let mapObj = null;
+let mapLayer = null;
 async function renderMap(focusPlace=null){
   const typeCd = document.getElementById('map-type').value;
   const date = document.getElementById('map-date').value || todayStr();
-  const status = document.getElementById('map-status').value || 'all';
+  const status = document.getElementById('map-status').value;
   const db = await openDB();
   const types = await idbGetAll(txStore(db,'types'));
   populateTypeSelects(types);
   if(!typeCd){
-    document.getElementById('legend').innerHTML = '<span class="helper">点検種類を選択してください（一覧から遷移してください）</span>';
+    document.getElementById('legend').innerHTML = '<span class="helper">点検種類を選択してください</span>';
     document.getElementById('map').innerHTML = '';
     return;
   }
   const places = await idbIndexGetAll(txStore(db,'places'),'typeCd', typeCd);
   const inspStore = txStore(db,'inspections');
+  const markers = [];
   const colorActive = colorForTypeCd(typeCd);
   const legend = document.getElementById('legend');
   legend.innerHTML = '';
   const chipA = document.createElement('div'); chipA.className='chip'; chipA.innerHTML = `<span class="dot" style="background:${colorActive}"></span><span>未完了</span>`; legend.appendChild(chipA);
   const chipB = document.createElement('div'); chipB.className='chip'; chipB.innerHTML = `<span class="dot" style="background:#9ca3af"></span><span>完了</span>`; legend.appendChild(chipB);
 
+  // init map
   if(!mapObj){
     mapObj = L.map('map');
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(mapObj);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(mapObj);
   }
+  // clear old layer group
   if(mapLayer){ mapLayer.remove(); }
   mapLayer = L.layerGroup().addTo(mapObj);
 
@@ -289,37 +325,37 @@ async function renderMap(focusPlace=null){
     if(status!=='all' && status!==thisStatus) continue;
     const color = isDone ? '#9ca3af' : colorActive; // gray if done
     const m = L.circleMarker([p.lat, p.lng], {radius:10, color:color, fillColor:color, fillOpacity:0.9});
-
     const popup = document.createElement('div');
-    popup.innerHTML = `<div style="margin-bottom:6px"><strong>${p.name}</strong></div><div class="small" style="margin-bottom:8px">${p.lat}, ${p.lng}</div>`;
-
-    const btnStart = document.createElement('button'); btnStart.className='btn primary'; btnStart.textContent='点検を開始';
-    btnStart.onclick = async ()=>{ const typeObj = await idbGet(txStore(db,'types'), typeCd); document.body.classList.remove('fullscreen-map'); openForm(typeObj, p, date); };
-
-    const btnGo = document.createElement('button'); btnGo.className='btn'; btnGo.style.marginLeft='8px'; btnGo.textContent='ここへ行く';
-    btnGo.onclick = ()=>{
-      if(p.lat!=null && p.lng!=null){ const url = `https://www.google.com/maps?q=${encodeURIComponent(p.lat)},${encodeURIComponent(p.lng)}`; window.open(url, '_blank', 'noopener'); }
-      else { alert('この地点には緯度経度が設定されていません'); }
+    popup.innerHTML = `<strong>${p.name}</strong><br><span class="small">${p.lat}, ${p.lng}</span><br>`;
+    const btn = document.createElement('button'); btn.className='btn'; btn.textContent='点検を開始';
+    btn.onclick = async ()=>{
+      const typeObj = await idbGet(txStore(db,'types'), typeCd);
+      openForm(typeObj, p, date);
     };
-
-    const wrap = document.createElement('div'); wrap.style.display='flex'; wrap.style.flexWrap='wrap'; wrap.appendChild(btnStart); wrap.appendChild(btnGo);
-    popup.appendChild(wrap);
-
+    popup.appendChild(document.createElement('br'));
+    popup.appendChild(btn);
     m.bindPopup(popup);
     m.addTo(mapLayer);
     bounds.push([p.lat,p.lng]);
-    if(focusPlace && focusPlace.placeId===p.placeId){ setTimeout(()=>m.openPopup(), 250); }
+    if(focusPlace && focusPlace.placeId===p.placeId){ setTimeout(()=>m.openPopup(), 300); }
   }
-  if(bounds.length){ mapObj.fitBounds(bounds, {padding:[30,30]}); }
-  else { mapObj.setView([26.2125, 127.6809], 10); }
+  if(bounds.length){
+    mapObj.fitBounds(bounds, {padding:[30,30]});
+  } else {
+    // Okinawa area default if none
+    mapObj.setView([26.2125, 127.6809], 10);
+  }
 }
 
 // ===== Form =====
 async function openForm(typeObj, place, date){
+  state.currentTypeObj = typeObj;
+  state.currentPlace = place;
   const formSec = document.getElementById('inspect-form');
   formSec.innerHTML = '';
   const meta = document.getElementById('form-meta');
   meta.textContent = `種類：${typeObj.typeCd} ${typeObj.typeName} ／ 場所：${place.name} ／ 日付：${date}`;
+  // Build fields
   for(const item of typeObj.items){
     const row = document.createElement('div'); row.className='form-row';
     const label = document.createElement('label'); label.textContent = item.label; row.appendChild(label);
@@ -345,11 +381,10 @@ async function openForm(typeObj, place, date){
       }
     } else if(item.inputType==='okng'){
       const seg = document.createElement('div'); seg.className='segment';
-      const ok = document.createElement('button'); ok.type='button'; ok.className='seg-btn ok-button'; ok.textContent='OK'; ok.setAttribute('aria-pressed','false');
-      const ng = document.createElement('button'); ng.type='button'; ng.className='seg-btn ng-button'; ng.textContent='NG'; ng.setAttribute('aria-pressed','false');
-      const setActive = (btn, value)=>{ seg.querySelectorAll('.seg-btn').forEach(x=>{ x.classList.remove('active'); x.setAttribute('aria-pressed','false'); }); btn.classList.add('active'); btn.setAttribute('aria-pressed','true'); seg.dataset.value=value; };
-      ok.onclick = ()=> setActive(ok,'OK');
-      ng.onclick = ()=> setActive(ng,'NG');
+      const ok = document.createElement('button'); ok.type='button'; ok.className='seg-btn'; ok.textContent='OK'; ok.style.background='var(--ok)'; ok.style.color='#fff';
+      const ng = document.createElement('button'); ng.type='button'; ng.className='seg-btn'; ng.textContent='NG'; ng.style.background='var(--ng)'; ng.style.color='#fff';
+      ok.onclick = ()=>{ seg.querySelectorAll('.seg-btn').forEach(x=>x.classList.remove('active')); ok.classList.add('active'); seg.dataset.value='OK'; };
+      ng.onclick = ()=>{ seg.querySelectorAll('.seg-btn').forEach(x=>x.classList.remove('active')); ng.classList.add('active'); seg.dataset.value='NG'; };
       seg.dataset.value=''; seg.dataset.name=item.label;
       seg.appendChild(ok); seg.appendChild(ng);
       row.appendChild(seg);
@@ -357,14 +392,17 @@ async function openForm(typeObj, place, date){
     formSec.appendChild(row);
   }
   showScreen('form');
-  document.getElementById('btn-save').onclick = ()=>saveInspection(date, place, typeObj);
+  // Attach handlers
+  document.getElementById('btn-save').onclick = ()=>saveInspection(date);
   document.getElementById('btn-cancel').onclick = ()=>{ showScreen('list'); };
 }
 
-async function saveInspection(date, place, typeObj){
+async function saveInspection(date){
+  const place = state.currentPlace; const typeObj = state.currentTypeObj;
   const formSec = document.getElementById('inspect-form');
   const answers = {};
   formSec.querySelectorAll('input, select').forEach(el=>{ answers[el.name]=el.value; });
+  // segment controls
   formSec.querySelectorAll('.segment').forEach(seg=>{ const name = seg.dataset.name; if(name) answers[name] = seg.dataset.value || ''; });
   const id = `${date}::${place.placeId}`;
   const rec = { id, date, typeCd: typeObj.typeCd, placeId: place.placeId, status: 'submitted', answers, ts: new Date().toISOString() };
@@ -397,17 +435,17 @@ async function exportCsv(){
   }
   const content = rows.map(r=>r.map(cell=>{
     const s = (cell==null? '': String(cell));
-    return (s.includes(',')||s.includes('"')||s.includes('
-')) ? '"'+ s.replace(/"/g,'""') +'"' : s;
-  }).join(',')).join('
-');
+    return (s.includes(',')||s.includes('"')||s.includes('\n')) ? '"'+ s.replace(/"/g,'""') +'"' : s;
+  }).join(',')).join('\n');
   downloadFile(`export_${typeObj.typeCd}_${date}.csv`, content, 'text/csv;charset=utf-8');
 }
 
 // ===== Event bindings =====
 window.addEventListener('DOMContentLoaded', async ()=>{
   // nav
-  document.querySelectorAll('nav button').forEach(b=> b.addEventListener('click', ()=>{ showScreen(b.dataset.nav); }));
+  document.querySelectorAll('nav button').forEach(b=> b.addEventListener('click', ()=>{
+    showScreen(b.dataset.nav);
+  }));
   // set initial dates
   document.getElementById('filter-date').value = todayStr();
   document.getElementById('map-date').value = todayStr();
@@ -416,8 +454,11 @@ window.addEventListener('DOMContentLoaded', async ()=>{
   document.getElementById('btn-import-master').onclick = async ()=>{
     const f = document.getElementById('master-file').files[0];
     if(!f){ alert('CSVファイルを選択してください'); return; }
-    try{ await importMaster(f); document.getElementById('master-result').textContent = '取り込み完了。種類リストを更新しました。'; await renderTypeList(); }
-    catch(err){ alert('エラー：'+err.message); }
+    try{
+      await importMaster(f);
+      document.getElementById('master-result').textContent = '取り込み完了。種類リストを更新しました。';
+      await renderTypeList();
+    }catch(err){ alert('エラー：'+err.message); }
   };
   document.getElementById('btn-clear-master').onclick = async ()=>{
     if(!confirm('マスター（種類）を全削除します。よろしいですか？')) return;
@@ -429,8 +470,10 @@ window.addEventListener('DOMContentLoaded', async ()=>{
   document.getElementById('btn-import-places').onclick = async ()=>{
     const f = document.getElementById('places-file').files[0];
     if(!f){ alert('CSVファイルを選択してください'); return; }
-    try{ const {imported, warnings} = await importPlaces(f); document.getElementById('places-result').textContent = `取り込み：${imported} 件（警告：緯度経度なし ${warnings} 件）`; }
-    catch(err){ alert('エラー：'+err.message); }
+    try{
+      const {imported, warnings} = await importPlaces(f);
+      document.getElementById('places-result').textContent = `取り込み：${imported} 件（警告：緯度経度なし ${warnings} 件）`;
+    }catch(err){ alert('エラー：'+err.message); }
   };
   document.getElementById('btn-clear-places').onclick = async ()=>{
     if(!confirm('点検場所を全削除します。よろしいですか？')) return;
@@ -444,14 +487,13 @@ window.addEventListener('DOMContentLoaded', async ()=>{
     document.getElementById('map-type').value = document.getElementById('filter-type').value;
     document.getElementById('map-date').value = document.getElementById('filter-date').value;
     document.getElementById('map-status').value = document.getElementById('filter-status').value;
-    document.body.classList.add('fullscreen-map');
     showScreen('map'); renderMap();
   };
   document.getElementById('btn-export').onclick = exportCsv;
 
-  // map change (UI は非表示になるが内部値は維持)
+  // map change
   ['map-type','map-date','map-status'].forEach(id=> document.getElementById(id).addEventListener('change', ()=>renderMap()));
-  document.getElementById('btn-back-list').onclick = ()=>{ document.body.classList.remove('fullscreen-map'); showScreen('list'); };
+  document.getElementById('btn-back-list').onclick = ()=> showScreen('list');
 
   await renderTypeList();
 });
