@@ -66,7 +66,7 @@ function csvParse(text){
   const pushField=()=>{ row.push(field); field=''; };
   const pushRow=()=>{ rows.push(row); row=[]; };
   while(i<text.length){
-    const c=text[i];
+    const c=text[i]; 
     if(inQ){
       if(c==='"'){
         if(text[i+1]==='"'){ field+='"'; i++; } else { inQ=false; }
