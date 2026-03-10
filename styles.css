@@ -1,0 +1,85 @@
+
+:root{
+  --accent:#2563eb; /* blue-600 */
+  --ok:#16a34a;     /* green-600 */
+  --ng:#dc2626;     /* red-600 */
+  --gray:#6b7280;   /* gray-500 */
+}
+*{box-sizing:border-box}
+body{font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans JP", sans-serif; margin:0; color:#111}
+header{position:sticky; top:0; z-index:10; background:#fff; border-bottom:1px solid #e5e7eb}
+header .wrap{display:flex; align-items:center; justify-content:space-between; padding:10px 16px}
+nav button{margin-right:8px; padding:8px 12px; border:1px solid #e5e7eb; background:#fff; border-radius:10px; cursor:pointer}
+nav button.active{background:var(--accent); color:#fff; border-color:var(--accent)}
+main{padding:16px; max-width:1100px; margin:0 auto}
+section{display:none}
+section.active{display:block}
+.card{border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin:12px 0; background:#fff}
+.row{display:flex; gap:12px; flex-wrap:wrap;}
+.row > *{flex:1 1 260px}
+label{display:block; font-size:12px; color:#374151; margin-bottom:6px}
+input[type="date"], select, input[type="text"], input[type="number"]{width:100%; padding:8px 10px; border:1px solid #e5e7eb; border-radius:8px}
+input[type="file"]{width:100%}
+.btn{display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:10px; border:1px solid #e5e7eb; background:#fff; cursor:pointer}
+.btn.primary{background:var(--accent); color:#fff; border-color:var(--accent)}
+.btn.ok{background:var(--ok); color:#fff; border-color:var(--ok)}
+.btn.ng{background:var(--ng); color:#fff; border-color:var(--ng)}
+.btn.gray{background:#f3f4f6; color:#111}
+.badge{display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid #e5e7eb}
+.badge.complete{background:#e5e7eb; color:#111}
+.badge.pending{background:#dbeafe; color:#1d4ed8}
+.table{width:100%; border-collapse:collapse; font-size:14px}
+.table th, .table td{padding:10px 8px; border-bottom:1px solid #f1f5f9; text-align:left}
+.table th{background:#f9fafb}
+.helper{color:#6b7280; font-size:12px}
+#map{height:70vh; border-radius:12px; border:1px solid #e5e7eb}
+.legend{display:flex; gap:10px; flex-wrap:wrap; margin:10px 0}
+.legend .chip{display:flex; align-items:center; gap:6px}
+.legend .dot{width:12px; height:12px; border-radius:999px; display:inline-block}
+.segment{display:flex; gap:8px; flex-wrap:wrap}
+.segment .seg-btn{padding:8px 12px; border-radius:999px; border:1px solid #e5e7eb; cursor:pointer; background:#fff}
+.segment .seg-btn.active{background:#2563eb; color:#fff; border-color:#2563eb}
+form .form-row{margin-bottom:14px}
+footer{padding:30px; text-align:center; color:#6b7280}
+.small{font-size:12px}
+
+/* ==== ボタン視認性向上（背景色・状態強調） ==== */
+.btn{ background:#e0f2fe; color:#0c4a6e; border-color:#7dd3fc; }
+.btn:hover{ background:#bae6fd; border-color:#38bdf8; }
+.btn:active{ background:#7dd3fc; border-color:#0ea5e9; }
+.btn:focus-visible{ outline:3px solid rgba(14,165,233,0.5); outline-offset:2px; }
+.btn.primary{ background:var(--accent); color:#fff; border-color:var(--accent); }
+.btn.info{ background:#dbeafe; color:#1e40af; border-color:#93c5fd; }
+.btn.info:hover{ background:#bfdbfe; border-color:#60a5fa; }
+.btn.info:active{ background:#93c5fd; border-color:#3b82f6; }
+
+/* ==== OK/NG セグメントの視認性強化 ==== */
+.segment .seg-btn{ transition: transform .08s, box-shadow .08s, border-color .08s; border:1px solid #e5e7eb; box-shadow:none; }
+.segment .seg-btn.ok-button{ background: var(--ok); color:#fff; border-color: var(--ok); }
+.segment .seg-btn.ng-button{ background: var(--ng); color:#fff; border-color: var(--ng); }
+.segment .seg-btn.active{ transform: scale(1.02); box-shadow:0 0 0 3px rgba(37,99,235,0.2); border-width:2px; }
+.segment .seg-btn:not(.active){ filter:saturate(.9) brightness(.98); opacity:.95; }
+.segment .seg-btn:focus-visible{ outline:3px solid rgba(37,99,235,.5); outline-offset:2px; border-radius:999px; }
+
+/* ==== 地図フルスクリーン（一覧から遷移時） ==== */
+body.fullscreen-map header{ display:none; }
+body.fullscreen-map main{ padding:0; max-width:none; }
+body.fullscreen-map #screen-map .card{ border:0; border-radius:0; margin:0; padding:0; }
+body.fullscreen-map #map{ height:100vh; width:100vw; border:0; border-radius:0; }
+body.fullscreen-map #screen-map .row,
+body.fullscreen-map #screen-map label,
+body.fullscreen-map #screen-map select,
+body.fullscreen-map #screen-map input[type="date"],
+body.fullscreen-map #screen-map #legend,
+body.fullscreen-map #screen-map #btn-back-list{ display:none !important; }
+
+/* Mobile tweaks */
+@media (max-width: 640px){
+  body{ font-size:15px; }
+  header .wrap{ padding:8px 12px; }
+  nav button{ padding:10px 12px; border-radius:12px; margin:4px 6px 0 0; }
+  .card{ padding:12px; border-radius:12px; }
+  input[type="date"], select, input[type="text"], input[type="number"], input[type="file"]{ padding:12px 10px; font-size:16px; border-radius:10px; }
+  .btn{ padding:12px 14px; border-radius:12px; font-size:16px; }
+  #map{ height:60vh; }
+}
