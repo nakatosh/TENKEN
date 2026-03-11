@@ -317,7 +317,7 @@ async function renderMap() {
     m.addTo(mapLayer);
     bounds.push([p.lat, p.lng]);
   }
-  if (bounds.length) mapObj.fitBounds(bounds, { padding: });
+  if (bounds.length) mapObj.fitBounds(bounds, {padding:});
   else mapObj.setView([35.6812, 139.7671], 10);
 }
 
