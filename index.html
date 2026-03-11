@@ -15,17 +15,17 @@
     <div class="wrap">
       <div style="display:flex; align-items:center; gap:10px"><strong>点検PWA</strong></div>
       <nav>
-        <button data-nav="master" class="active">マスター取込</button>
-        <button data-nav="places">点検場所取込</button>
-        <button data-nav="list">点検場所一覧</button>
-        <button data-nav="map">地図</button>
+        <button data-nav="master" class="active">項目設定</button>
+        <button data-nav="places">点検情報取込</button>
+        <button data-nav="list">点検一覧</button>
+        <button data-nav="map">MAP</button>
       </nav>
     </div>
   </header>
   <main>
     <section id="screen-master" class="active">
       <div class="card">
-        <h2>マスター取込（CSV）</h2>
+        <h2>点検項目取込（CSV）</h2>
         <p class="helper">CSV 仕様（ヘッダ必須）：点検種類CD, 点検種類, 項目, 入力種別CD, 入力種別, 選択肢<br>入力種別CD：1=数字(number) / 2=テキスト(text) / 3=選択肢(select) / 4=OK/NG(okng)</p>
         <div class="row"><div><label>CSVファイル</label><input type="file" id="master-file" accept=".csv"></div></div>
         <div style="margin-top:10px"><button class="btn primary" id="btn-import-master">取込</button> <button class="btn" id="btn-clear-master">マスター全削除</button></div>
@@ -44,7 +44,7 @@
     </section>
     <section id="screen-list">
       <div class="card">
-        <h2>点検場所一覧</h2>
+        <h2>点検一覧</h2>
         <div class="row">
           <div><label>点検種類（必須）</label><select id="filter-type"></select></div>
           <div><label>対象日</label><input type="date" id="filter-date"></div>
