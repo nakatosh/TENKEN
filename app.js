@@ -461,3 +461,4 @@ window.addEventListener('DOMContentLoaded', async () => {
   
   await renderTypeList();
 });
+// ↑ これより下には何も書かない（ここでファイルを終わらせる）
