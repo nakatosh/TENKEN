@@ -1,21 +1,22 @@
 {
-  "name": "現場点検アプリ",
-  "short_name": "点検PWA",
-  "description": "オフライン対応の現場点検支援ツール",
-  "start_url": "./index.html",
-  "display": "standalone",
-  "background_color": "#f3f4f6",
-  "theme_color": "#2563eb",
+  "short_name": "点検アプリ",
+  "name": "設備点検PWAシステム",
   "icons": [
     {
       "src": "icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "sizes": "192x192"
     },
     {
       "src": "icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "sizes": "512x512"
     }
-  ]
+  ],
+  "start_url": "./index.html",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "scope": "./",
+  "theme_color": "#2563eb"
 }
+

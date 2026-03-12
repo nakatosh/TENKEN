@@ -119,14 +119,29 @@ window.openInspectForm = async (placeId) => {
   document.getElementById('form-meta').textContent = `${place.name} (${date})`;
 
   type.items.forEach((item, index) => {
-    const row = document.createElement('div'); row.className = 'form-row'; row.id = `row-${index}`;
+    const row = document.createElement('div'); 
+    row.className = 'form-row'; 
+    row.id = `row-${index}`;
     if(index===0) row.classList.add('active-row');
-    row.innerHTML = `<label style="font-size:16px; font-weight:bold; margin-bottom:10px;">${item.label}</label>`;
+
+    // ★ 戻りたい時に項目をタップすればそこがアクティブになる機能を追加
+    row.onclick = () => {
+      if (!row.classList.contains('active-row')) {
+        document.querySelectorAll('.form-row').forEach(r => r.classList.remove('active-row'));
+        row.classList.add('active-row');
+        row.scrollIntoView({behavior:'smooth', block:'center'});
+      }
+    };
+
+    row.innerHTML = `<label style="font-size:16px; font-weight:bold; margin-bottom:10px; display:block;">${item.label}</label>`;
 
     const goToNext = () => {
       row.classList.remove('active-row');
       const next = document.getElementById(`row-${index+1}`);
-      if(next) { next.classList.add('active-row'); next.scrollIntoView({behavior:'smooth', block:'center'}); }
+      if(next) { 
+        next.classList.add('active-row'); 
+        next.scrollIntoView({behavior:'smooth', block:'center'}); 
+      }
       else { document.getElementById('btn-save').scrollIntoView({behavior:'smooth'}); }
     };
 
@@ -134,17 +149,44 @@ window.openInspectForm = async (placeId) => {
       const seg = document.createElement('div'); seg.className = 'segment';
       ['OK', 'NG'].forEach(v => {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'seg-btn'; b.textContent = v;
-        b.onclick = () => { seg.querySelectorAll('button').forEach(x => x.classList.remove('active')); b.classList.add('active'); seg.dataset.value = v; setTimeout(goToNext, 250); };
+        b.onclick = (e) => { 
+          e.stopPropagation(); // rowのクリックイベント発火を防ぐ
+          seg.querySelectorAll('button').forEach(x => x.classList.remove('active')); 
+          b.classList.add('active'); 
+          seg.dataset.value = v; 
+          setTimeout(goToNext, 250); 
+        };
         seg.appendChild(b);
       });
       seg.dataset.name = item.label; row.appendChild(seg);
-    } else if (item.inputType === 'select') {
-      const s = document.createElement('select'); s.name = item.label;
-      s.innerHTML = '<option value="">選択してください</option>' + item.options.map(o => `<option value="${o}">${o}</option>`).join('');
-      s.onchange = () => { if(s.value) setTimeout(goToNext, 300); };
-      row.appendChild(s);
-    } else {
+    } 
+    else if (item.inputType === 'select') {
+      const listContainer = document.createElement('div');
+      listContainer.className = 'list-options-container'; 
+      listContainer.style.cssText = 'display:flex; flex-direction:column; gap:8px; margin-top:10px;';
+
+      item.options.forEach(opt => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'seg-btn';
+        b.textContent = opt;
+        b.style.cssText = 'text-align:left; padding:15px; font-size:16px; font-weight:bold;';
+
+        b.onclick = (e) => {
+          e.stopPropagation(); // rowのクリックイベント発火を防ぐ
+          listContainer.querySelectorAll('button').forEach(x => x.classList.remove('active'));
+          b.classList.add('active');
+          listContainer.dataset.value = opt;
+          setTimeout(goToNext, 250);
+        };
+        listContainer.appendChild(b);
+      });
+      listContainer.dataset.name = item.label;
+      row.appendChild(listContainer);
+    } 
+    else {
       const inp = document.createElement('input'); inp.name = item.label; inp.type = item.inputType;
+      inp.onclick = (e) => e.stopPropagation();
       inp.onkeypress = (e) => { if(e.key==='Enter'){ e.preventDefault(); goToNext(); }};
       row.appendChild(inp);
     }
@@ -158,7 +200,9 @@ window.openInspectForm = async (placeId) => {
 document.getElementById('btn-save').onclick = async () => {
   const answers = {}; const form = document.getElementById('inspect-form');
   form.querySelectorAll('input, select').forEach(i => answers[i.name] = i.value);
-  form.querySelectorAll('.segment').forEach(s => answers[s.dataset.name] = s.dataset.value || '');
+  form.querySelectorAll('.segment, .list-options-container').forEach(s => {
+    if(s.dataset.name) answers[s.dataset.name] = s.dataset.value || '';
+  });
   const storeI = await getStore('inspections', 'readwrite');
   await storeI.put({ id: `${state.activeDate}::${state.activePlaceId}`, status: 'submitted', answers, date: state.activeDate });
   alert('完了'); showScreen('list');
@@ -169,35 +213,66 @@ window.onload = () => {
   document.getElementById('btn-back-list').onclick = () => showScreen('list');
   document.getElementById('btn-cancel').onclick = () => showScreen('list');
   document.getElementById('btn-go-map').onclick = () => showScreen('map');
-  ['filter-type', 'filter-date', 'filter-status'].forEach(id => document.getElementById(id).onchange = refreshList);
+  ['filter-type', 'filter-date', 'filter-status'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.onchange = refreshList;
+  });
   
   document.getElementById('btn-import-master').onclick = async () => {
     const f = document.getElementById('master-file').files[0]; if(!f) return;
-    const rows = (await f.text()).split('\n').map(r => r.split(','));
+    const text = await f.text();
+    const rows = text.split(/\r?\n/).map(row => {
+      return row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.replace(/^"|"$/g, '').trim());
+    });
     const storeT = await getStore('types', 'readwrite');
     const map = new Map();
-    rows.slice(1).forEach(r => { if(r.length<4) return; const cd = r[0].trim(); const obj = map.get(cd) || { typeCd: cd, typeName: r[1], items: [] };
-      obj.items.push({ label: r[2], inputType: r[3].trim()==='3'?'select':(r[3].trim()==='4'?'okng':'text'), options: r[5]?r[5].replace(/、/g,',').split(','):[] });
-      map.set(cd, obj); });
-    for (const v of map.values()) storeT.put(v); alert('マスター完了'); location.reload();
+    rows.slice(1).forEach(r => { 
+      if(r.length < 4) return; 
+      const cd = r[0]; 
+      const obj = map.get(cd) || { typeCd: cd, typeName: r[1], items: [] };
+      let opts = [];
+      if (r[5]) {
+        opts = r[5].split(/[、,\n]/).map(o => o.trim()).filter(o => o !== "");
+      }
+      obj.items.push({ 
+        label: r[2], 
+        inputType: r[3]==='3' ? 'select' : (r[3]==='4' ? 'okng' : 'text'), 
+        options: opts 
+      });
+      map.set(cd, obj); 
+    });
+    for (const v of map.values()) await storeT.put(v);
+    alert('マスター完了'); location.reload();
   };
 
   document.getElementById('btn-import-places').onclick = async () => {
     const f = document.getElementById('places-file').files[0]; if(!f) return;
-    const rows = (await f.text()).split('\n').map(r => r.split(','));
+    const text = await f.text();
+    const rows = text.split(/\r?\n/).map(r => r.split(',').map(v => v.replace(/^"|"$/g, '').trim()));
     const storeP = await getStore('places', 'readwrite');
-    rows.slice(1).forEach(r => { if(r.length<4) return; const p = { typeCd: r[0].trim(), lat: Number(r[1]), lng: Number(r[2]), name: r[3].trim() }; p.placeId = hashId(p.typeCd+p.name+p.lat); storeP.put(p); });
+    rows.slice(1).forEach(r => { 
+      if(r.length<4) return; 
+      const p = { typeCd: r[0], lat: Number(r[1]), lng: Number(r[2]), name: r[3] }; 
+      p.placeId = hashId(p.typeCd+p.name+p.lat); 
+      storeP.put(p); 
+    });
     alert('場所完了');
   };
 
   openDB().then(db => {
     const req = db.transaction('types').objectStore('types').getAll();
-    req.onsuccess = () => { const sel = document.getElementById('filter-type'); req.result.forEach(t => sel.add(new Option(`${t.typeCd}: ${t.typeName}`, t.typeCd))); };
+    req.onsuccess = () => { 
+      const sel = document.getElementById('filter-type'); 
+      req.result.forEach(t => sel.add(new Option(`${t.typeCd}: ${t.typeName}`, t.typeCd))); 
+    };
   });
 };
-// app.js の最後の方に追加
+
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js')
-    .then(() => console.log('Service Worker Registered'));
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('Service Worker registered', reg))
+      .catch(err => console.error('Service Worker failed', err));
+  });
 }
 

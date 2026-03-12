@@ -1,114 +1,114 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>点検PWA</title>
-  <link rel="manifest" href="manifest.webmanifest">
-  <meta name="theme-color" content="#2563eb" />
-  <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>点検アプリ PWA</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
+
+<header>
     <div class="wrap">
-      <div style="display:flex; align-items:center; gap:10px">
-        <strong>点検アプリ</strong>
-      </div>
-      <nav>
-        <button data-nav="master" class="active">設定</button>
-        <button data-nav="places">取込</button>
-        <button data-nav="list">一覧</button>
-      </nav>
+        <div style="font-weight:bold; font-size:18px;">点検アプリ</div>
+        <nav>
+            <button data-nav="master" class="active">設定</button>
+            <button data-nav="list">一覧</button>
+        </nav>
     </div>
-  </header>
+</header>
 
-  <main>
+<main>
     <section id="screen-master" class="active">
-      <div class="card">
-        <h2>マスター取込</h2>
-        <input type="file" id="master-file" accept=".csv">
-        <div style="margin-top:10px">
-          <button class="btn primary" id="btn-import-master">取込</button>
-          <button class="btn ng" id="btn-clear-master">全削除</button>
+        <div class="card">
+            <h3>データ取込</h3>
+            <div class="row">
+                <div>
+                    <label>点検項目マスター (CSV)</label>
+                    <input type="file" id="master-file" accept=".csv">
+                    <button class="btn primary" id="btn-import-master" style="margin-top:8px; width:100%;">マスター取込</button>
+                </div>
+                <div>
+                    <label>点検場所データ (CSV)</label>
+                    <input type="file" id="places-file" accept=".csv">
+                    <button class="btn primary" id="btn-import-places" style="margin-top:8px; width:100%;">場所データ取込</button>
+                </div>
+            </div>
+            <p style="font-size:12px; color:var(--gray);">※取込後、自動的にリロードされます。</p>
         </div>
-        <ul id="type-list" style="margin-top:15px"></ul>
-      </div>
-    </section>
-
-    <section id="screen-places">
-      <div class="card">
-        <h2>点検場所取込</h2>
-        <input type="file" id="places-file" accept=".csv">
-        <div style="margin-top:10px">
-          <button class="btn primary" id="btn-import-places">取込</button>
-          <button class="btn ng" id="btn-clear-places">全削除</button>
-        </div>
-        <div id="places-result" class="small"></div>
-      </div>
     </section>
 
     <section id="screen-list">
-      <div class="card">
-        <h2>点検一覧</h2>
-        <div class="row">
-          <div>
-            <label>種類</label>
-            <select id="filter-type"></select>
-          </div>
-          <div>
-            <label>対象日 (任意)</label>
-            <input type="date" id="filter-date">
-          </div>
-          <div>
-            <label>状態</label>
-            <select id="filter-status">
-              <option value="all">すべて</option>
-              <option value="submitted">完了</option>
-              <option value="pending">未完了</option>
-            </select>
-          </div>
+        <div class="card">
+            <div class="row">
+                <div>
+                    <label>点検種別</label>
+                    <select id="filter-type">
+                        <option value="">選択してください</option>
+                    </select>
+                </div>
+                <div>
+                    <label>点検日</label>
+                    <input type="date" id="filter-date">
+                </div>
+                <div>
+                    <label>状況</label>
+                    <select id="filter-status">
+                        <option value="all">すべて</option>
+                        <option value="pending">未完了</option>
+                        <option value="submitted">完了</option>
+                    </select>
+                </div>
+            </div>
+            <button class="btn info" id="btn-go-map" style="width:100%; margin-bottom:15px;">地図で確認する</button>
         </div>
-        <div style="margin-top:10px">
-          <button class="btn info" id="btn-go-map">地図で表示</button>
-          <button class="btn ok" id="btn-export">CSV出力</button>
-        </div>
-        <div style="overflow:auto; margin-top:10px">
-          <table class="table">
-            <thead>
-              <tr><th>名称</th><th>状態</th><th>操作</th></tr>
-            </thead>
-            <tbody id="list-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
 
-    <section id="screen-map">
-      <div id="map-container">
-        <div id="map"></div>
-        <div id="map-ui">
-          <div id="legend"></div>
-          <button class="btn" id="btn-back-list">← 一覧へ戻る</button>
+        <div class="card" style="padding:0;">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>点検箇所</th>
+                        <th>状況</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="list-tbody">
+                    </tbody>
+            </table>
         </div>
-      </div>
     </section>
 
     <section id="screen-form">
-      <div class="card" style="padding-bottom:100px;">
-        <h2 id="form-title">点検入力</h2>
-        <div id="form-meta" class="helper"></div>
-        <hr>
-        <form id="inspect-form"></form>
-        <div style="margin-top:30px; display:flex; gap:10px">
-          <button class="btn primary" id="btn-save" style="flex:1; padding:20px;">保存して完了</button>
-          <button class="btn gray" id="btn-cancel">キャンセル</button>
+        <div style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+            <button class="btn" id="btn-back-list">← 戻る</button>
+            <h2 id="form-meta" style="margin:0; font-size:16px;"></h2>
         </div>
-      </div>
+        
+        <div id="inspect-form">
+            </div>
+
+        <div style="padding:20px; display:flex; gap:10px;">
+            <button class="btn" id="btn-cancel" style="flex:1;">キャンセル</button>
+            <button class="btn primary" id="btn-save" style="flex:2; font-size:18px;">点検完了を保存</button>
+        </div>
     </section>
-  </main>
-  <script src="app.js"></script>
+
+    <section id="screen-map">
+        <div id="map"></div>
+        <div id="map-ui">
+            <button class="btn primary" onclick="showScreen('list')" style="box-shadow: 0 4px 10px rgba(0,0,0,0.3);">一覧に戻る</button>
+        </div>
+    </section>
+</main>
+
+<script src="app.js"></script>
 </body>
 </html>
 
