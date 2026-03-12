@@ -2,7 +2,7 @@ const CACHE_NAME = 'inspection-v1';
 const ASSETS = [
   './',
   './index.html',
-  './styles.css',
+  './style.css',
   './app.js',
   './manifest.webmanifest',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
