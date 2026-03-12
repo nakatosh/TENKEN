@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>点検アプリ PWA</title>
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="manifest.webmanifest">
     <meta name="theme-color" content="#2563eb">
     <link rel="apple-touch-icon" href="icon-192.png">
     
@@ -67,7 +67,8 @@
                     </select>
                 </div>
             </div>
-            <button class="btn info" id="btn-go-map" style="width:100%; margin-bottom:15px;">地図で確認する</button>
+            <button class="btn info" id="btn-go-map" style="width:100%; margin-bottom:10px;">地図で確認する</button>
+            <button class="btn" id="btn-export-csv" style="width:100%; margin-bottom:15px; background: #f9fafb;">検索結果をCSV出力</button>
         </div>
 
         <div class="card" style="padding:0;">
@@ -80,7 +81,7 @@
                     </tr>
                 </thead>
                 <tbody id="list-tbody">
-                    </tbody>
+                </tbody>
             </table>
         </div>
     </section>
@@ -92,7 +93,7 @@
         </div>
         
         <div id="inspect-form">
-            </div>
+        </div>
 
         <div style="padding:20px; display:flex; gap:10px;">
             <button class="btn" id="btn-cancel" style="flex:1;">キャンセル</button>

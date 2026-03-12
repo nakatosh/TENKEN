@@ -108,6 +108,58 @@ async function renderMap(focusPlace = null) {
   if (bounds.length) state.mapObj.fitBounds(bounds, { padding: [50, 50] });
 }
 
+async function exportToCSV() {
+  const typeCd = document.getElementById('filter-type').value;
+  const date = document.getElementById('filter-date').value;
+  const statusFilter = document.getElementById('filter-status').value;
+
+  if (!typeCd) { alert('点検種別を選択してください'); return; }
+
+  const storeP = await getStore('places');
+  const places = await new Promise(res => {
+    const req = storeP.index('typeCd').getAll(typeCd);
+    req.onsuccess = () => res(req.result);
+  });
+  
+  const storeI = await getStore('inspections');
+  const exportData = [];
+
+  for (const p of places) {
+    const rec = await new Promise(res => {
+      if(!date) { res(null); return; }
+      const req = storeI.get(`${date}::${p.placeId}`);
+      req.onsuccess = () => res(req.result);
+    });
+
+    const isDone = rec?.status === 'submitted';
+    const st = isDone ? 'submitted' : 'pending';
+    if (statusFilter !== 'all' && statusFilter !== st) continue;
+
+    const row = { '点検日': date || '', '場所名': p.name, '状況': isDone ? '完了' : '未完了' };
+    if (rec?.answers) {
+      Object.entries(rec.answers).forEach(([k, v]) => { row[k] = v; });
+    }
+    exportData.push(row);
+  }
+
+  if (exportData.length === 0) { alert('出力対象のデータがありません'); return; }
+
+  const allKeys = new Set();
+  exportData.forEach(row => Object.keys(row).forEach(k => allKeys.add(k)));
+  const headers = Array.from(allKeys);
+
+  const csvContent = [
+    headers.join(','),
+    ...exportData.map(row => headers.map(h => `"${row[h] || ''}"`).join(','))
+  ].join('\n');
+
+  const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `inspection_${typeCd}_${date || 'all'}.csv`;
+  link.click();
+}
+
 window.openInspectForm = async (placeId) => {
   const storeP = await getStore('places');
   const place = await new Promise(res => { const req = storeP.get(placeId); req.onsuccess = () => res(req.result); });
@@ -124,7 +176,6 @@ window.openInspectForm = async (placeId) => {
     row.id = `row-${index}`;
     if(index===0) row.classList.add('active-row');
 
-    // ★ 戻りたい時に項目をタップすればそこがアクティブになる機能を追加
     row.onclick = () => {
       if (!row.classList.contains('active-row')) {
         document.querySelectorAll('.form-row').forEach(r => r.classList.remove('active-row'));
@@ -138,10 +189,7 @@ window.openInspectForm = async (placeId) => {
     const goToNext = () => {
       row.classList.remove('active-row');
       const next = document.getElementById(`row-${index+1}`);
-      if(next) { 
-        next.classList.add('active-row'); 
-        next.scrollIntoView({behavior:'smooth', block:'center'}); 
-      }
+      if(next) { next.classList.add('active-row'); next.scrollIntoView({behavior:'smooth', block:'center'}); }
       else { document.getElementById('btn-save').scrollIntoView({behavior:'smooth'}); }
     };
 
@@ -150,7 +198,7 @@ window.openInspectForm = async (placeId) => {
       ['OK', 'NG'].forEach(v => {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'seg-btn'; b.textContent = v;
         b.onclick = (e) => { 
-          e.stopPropagation(); // rowのクリックイベント発火を防ぐ
+          e.stopPropagation(); 
           seg.querySelectorAll('button').forEach(x => x.classList.remove('active')); 
           b.classList.add('active'); 
           seg.dataset.value = v; 
@@ -164,16 +212,11 @@ window.openInspectForm = async (placeId) => {
       const listContainer = document.createElement('div');
       listContainer.className = 'list-options-container'; 
       listContainer.style.cssText = 'display:flex; flex-direction:column; gap:8px; margin-top:10px;';
-
       item.options.forEach(opt => {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'seg-btn';
-        b.textContent = opt;
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'seg-btn'; b.textContent = opt;
         b.style.cssText = 'text-align:left; padding:15px; font-size:16px; font-weight:bold;';
-
         b.onclick = (e) => {
-          e.stopPropagation(); // rowのクリックイベント発火を防ぐ
+          e.stopPropagation();
           listContainer.querySelectorAll('button').forEach(x => x.classList.remove('active'));
           b.classList.add('active');
           listContainer.dataset.value = opt;
@@ -181,8 +224,7 @@ window.openInspectForm = async (placeId) => {
         };
         listContainer.appendChild(b);
       });
-      listContainer.dataset.name = item.label;
-      row.appendChild(listContainer);
+      listContainer.dataset.name = item.label; row.appendChild(listContainer);
     } 
     else {
       const inp = document.createElement('input'); inp.name = item.label; inp.type = item.inputType;
@@ -213,6 +255,7 @@ window.onload = () => {
   document.getElementById('btn-back-list').onclick = () => showScreen('list');
   document.getElementById('btn-cancel').onclick = () => showScreen('list');
   document.getElementById('btn-go-map').onclick = () => showScreen('map');
+  document.getElementById('btn-export-csv').onclick = exportToCSV;
   ['filter-type', 'filter-date', 'filter-status'].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.onchange = refreshList;
@@ -221,24 +264,15 @@ window.onload = () => {
   document.getElementById('btn-import-master').onclick = async () => {
     const f = document.getElementById('master-file').files[0]; if(!f) return;
     const text = await f.text();
-    const rows = text.split(/\r?\n/).map(row => {
-      return row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.replace(/^"|"$/g, '').trim());
-    });
+    const rows = text.split(/\r?\n/).map(row => row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.replace(/^"|"$/g, '').trim()));
     const storeT = await getStore('types', 'readwrite');
     const map = new Map();
     rows.slice(1).forEach(r => { 
       if(r.length < 4) return; 
       const cd = r[0]; 
       const obj = map.get(cd) || { typeCd: cd, typeName: r[1], items: [] };
-      let opts = [];
-      if (r[5]) {
-        opts = r[5].split(/[、,\n]/).map(o => o.trim()).filter(o => o !== "");
-      }
-      obj.items.push({ 
-        label: r[2], 
-        inputType: r[3]==='3' ? 'select' : (r[3]==='4' ? 'okng' : 'text'), 
-        options: opts 
-      });
+      let opts = r[5] ? r[5].split(/[、,\n]/).map(o => o.trim()).filter(o => o !== "") : [];
+      obj.items.push({ label: r[2], inputType: r[3]==='3' ? 'select' : (r[3]==='4' ? 'okng' : 'text'), options: opts });
       map.set(cd, obj); 
     });
     for (const v of map.values()) await storeT.put(v);
@@ -270,9 +304,7 @@ window.onload = () => {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js')
-      .then(reg => console.log('Service Worker registered', reg))
-      .catch(err => console.error('Service Worker failed', err));
+    navigator.serviceWorker.register('./sw.js').then(reg => console.log('SW OK')).catch(err => console.log('SW NG'));
   });
 }
 
