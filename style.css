@@ -1,4 +1,3 @@
-/* 変数定義 */
 :root {
   --accent: #2563eb;
   --accent-light: #eff6ff;
@@ -8,8 +7,6 @@
   --border: #e5e7eb;
   --bg: #f3f4f6;
 }
-
-/* 基本リセット */
 * { box-sizing: border-box; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -19,8 +16,6 @@ body {
   line-height: 1.5;
   -webkit-tap-highlight-color: transparent;
 }
-
-/* ヘッダー */
 header {
   position: sticky;
   top: 0;
@@ -37,8 +32,6 @@ header .wrap {
   max-width: 1100px;
   margin: 0 auto;
 }
-
-/* ナビゲーションボタン */
 nav { display: flex; gap: 8px; }
 nav button {
   padding: 8px 16px;
@@ -55,8 +48,6 @@ nav button.active {
   color: #fff;
   border-color: var(--accent);
 }
-
-/* メインコンテンツ */
 main {
   padding: 16px;
   max-width: 1100px;
@@ -64,8 +55,6 @@ main {
 }
 section { display: none; }
 section.active { display: block; }
-
-/* カードスタイル */
 .card {
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -74,8 +63,6 @@ section.active { display: block; }
   background: #fff;
   box-shadow: 0 2px 4px rgba(0,0,0,0.02);
 }
-
-/* グリッドレイアウト */
 .row {
   display: flex;
   gap: 12px;
@@ -83,7 +70,6 @@ section.active { display: block; }
   margin-bottom: 10px;
 }
 .row > * { flex: 1 1 200px; }
-
 label {
   display: block;
   font-size: 13px;
@@ -91,7 +77,6 @@ label {
   color: var(--gray);
   margin-bottom: 6px;
 }
-
 input, select {
   width: 100%;
   padding: 12px;
@@ -101,12 +86,6 @@ input, select {
   background: #fff;
   outline: none;
 }
-input:focus, select:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-light);
-}
-
-/* ボタン各種 */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -119,79 +98,21 @@ input:focus, select:focus {
   font-weight: bold;
   transition: opacity 0.2s;
 }
-.btn:active { opacity: 0.7; }
 .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
 .btn.info { background: #dbeafe; color: #1e40af; border: none; }
-
-/* テーブル */
 .table { width: 100%; border-collapse: collapse; }
 .table th, .table td { padding: 16px 12px; border-bottom: 1px solid #eee; text-align: left; }
-.table th { background: #f9fafb; font-size: 12px; color: var(--gray); }
-
-/* バッジ */
 .badge { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: bold; }
 .badge.complete { background: #e5e7eb; color: #374151; }
 .badge.pending { background: #dbeafe; color: #1e40af; }
-
-/* 点検入力：1問1答スタイル */
-#inspect-form { margin-top: 10px; }
-.form-row { 
-  padding: 30px 20px; 
-  border-bottom: 1px solid var(--border); 
-  transition: all 0.3s ease; 
-  opacity: 0.3; /* 非アクティブは薄く */
-  filter: blur(1px);
-}
-.form-row.active-row { 
-  opacity: 1; 
-  filter: blur(0);
-  background: #fff; 
-  border-left: 6px solid var(--accent); 
-  border-radius: 4px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-  transform: scale(1.02);
-  margin: 10px 0;
-}
-
-/* OK/NG セグメントボタン */
+.form-row { padding: 30px 20px; border-bottom: 1px solid var(--border); transition: all 0.3s ease; opacity: 0.3; filter: blur(1px); }
+.form-row.active-row { opacity: 1; filter: blur(0); background: #fff; border-left: 6px solid var(--accent); border-radius: 4px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); transform: scale(1.02); margin: 10px 0; }
 .segment { display: flex; gap: 12px; margin-top: 15px; }
-.seg-btn { 
-  flex: 1; 
-  padding: 24px 10px; 
-  border: 2px solid var(--border); 
-  border-radius: 12px; 
-  background: #fff; 
-  cursor: pointer; 
-  font-size: 20px; 
-  font-weight: 900; 
-  transition: all 0.2s;
-}
-.seg-btn.active { 
-  border-color: var(--accent); 
-  background: var(--accent-light); 
-  color: var(--accent);
-  transform: translateY(-2px);
-}
-
-/* 地図画面の制御 */
+.seg-btn { flex: 1; padding: 24px 10px; border: 2px solid var(--border); border-radius: 12px; background: #fff; cursor: pointer; font-size: 20px; font-weight: 900; }
+.seg-btn.active { border-color: var(--accent); background: var(--accent-light); color: var(--accent); }
 #map { height: 75vh; width: 100%; border-radius: 12px; z-index: 1; }
-
-/* 地図全画面表示時のスタイル */
 body.fullscreen-map { overflow: hidden; }
 body.fullscreen-map header { display: none; }
 body.fullscreen-map main { padding: 0; max-width: none; }
 body.fullscreen-map #map { height: 100vh; width: 100vw; border-radius: 0; }
-body.fullscreen-map #map-ui { 
-  position: fixed; 
-  bottom: 30px; 
-  left: 50%; 
-  transform: translateX(-50%); 
-  z-index: 1000; 
-}
-
-/* レスポンシブ調整 */
-@media (max-width: 600px) {
-  .form-row.active-row { transform: none; margin: 5px 0; }
-  .seg-btn { padding: 18px 10px; font-size: 18px; }
-}
-
+body.fullscreen-map #map-ui { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 1000; }

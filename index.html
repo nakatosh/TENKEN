@@ -31,17 +31,26 @@
             <h3>データ取込</h3>
             <div class="row">
                 <div>
-                    <label>点検項目マスター (CSV)</label>
+                    <label>項目マスタ (CSV)</label>
                     <input type="file" id="master-file" accept=".csv">
-                    <button class="btn primary" id="btn-import-master" style="margin-top:8px; width:100%;">マスター取込</button>
+                    <button class="btn primary" id="btn-import-master" style="margin-top:8px; width:100%;">項目マスタ取込</button>
                 </div>
                 <div>
-                    <label>点検場所データ (CSV)</label>
+                    <label>点検データ (CSV)</label>
                     <input type="file" id="places-file" accept=".csv">
-                    <button class="btn primary" id="btn-import-places" style="margin-top:8px; width:100%;">場所データ取込</button>
+                    <button class="btn primary" id="btn-import-places" style="margin-top:8px; width:100%;">点検データ取込</button>
                 </div>
             </div>
             <p style="font-size:12px; color:var(--gray);">※取込後、自動的にリロードされます。</p>
+        </div>
+
+        <div class="card" style="border-color: #fee2e2;">
+            <h3 style="color: #dc2626;">データメンテナンス</h3>
+            <div class="row">
+                <button class="btn" id="btn-clear-master" style="color: #dc2626; border-color: #fecaca;">マスタ・点検データを全削除</button>
+                <button class="btn" id="btn-clear-inspections" style="color: #dc2626; border-color: #fecaca;">点検データのみ全削除</button>
+            </div>
+            <p style="font-size:12px; color:var(--gray);">※削除したデータは元に戻せません。</p>
         </div>
     </section>
 
@@ -91,10 +100,7 @@
             <button class="btn" id="btn-back-list">← 戻る</button>
             <h2 id="form-meta" style="margin:0; font-size:16px;"></h2>
         </div>
-        
-        <div id="inspect-form">
-        </div>
-
+        <div id="inspect-form"></div>
         <div style="padding:20px; display:flex; gap:10px;">
             <button class="btn" id="btn-cancel" style="flex:1;">キャンセル</button>
             <button class="btn primary" id="btn-save" style="flex:2; font-size:18px;">点検完了を保存</button>
@@ -112,4 +118,3 @@
 <script src="app.js"></script>
 </body>
 </html>
-

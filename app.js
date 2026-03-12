@@ -23,6 +23,17 @@ async function getStore(name, mode = 'readonly') {
   return db.transaction(name, mode).objectStore(name);
 }
 
+// 追加：データクリア関数
+async function clearStore(name) {
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(name, 'readwrite');
+    tx.objectStore(name).clear();
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej();
+  });
+}
+
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const hashId = (s) => 'ID' + Math.abs(s.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a; }, 0));
 
@@ -75,7 +86,7 @@ async function refreshList() {
   }
 }
 
-async function renderMap(focusPlace = null) {
+async function renderMap() {
   const typeCd = document.getElementById('filter-type').value;
   const date = document.getElementById('filter-date').value || todayStr();
   if (!typeCd) return;
@@ -95,12 +106,17 @@ async function renderMap(focusPlace = null) {
     const rec = await new Promise(res => { const req = storeI.get(`${date}::${p.placeId}`); req.onsuccess = () => res(req.result); });
     const isDone = rec?.status === 'submitted';
     const m = L.circleMarker([p.lat, p.lng], { radius: 15, color: isDone ? '#9ca3af' : '#2563eb', fillOpacity: 0.8 }).addTo(state.mapLayer);
+    
     const pop = document.createElement('div');
     pop.innerHTML = `<b>${p.name}</b><br><br>`;
+    
     const bNav = document.createElement('button'); bNav.className='btn info'; bNav.textContent='ナビ';
+    // 修正：GoogleマップのURL形式
     bNav.onclick = () => window.open(`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`, '_blank');
+    
     const bIns = document.createElement('button'); bIns.className='btn primary'; bIns.textContent='入力'; bIns.style.marginLeft='5px';
     bIns.onclick = () => openInspectForm(p.placeId);
+    
     pop.appendChild(bNav); pop.appendChild(bIns);
     m.bindPopup(pop);
     bounds.push([p.lat, p.lng]);
@@ -112,7 +128,6 @@ async function exportToCSV() {
   const typeCd = document.getElementById('filter-type').value;
   const date = document.getElementById('filter-date').value;
   const statusFilter = document.getElementById('filter-status').value;
-
   if (!typeCd) { alert('点検種別を選択してください'); return; }
 
   const storeP = await getStore('places');
@@ -123,36 +138,26 @@ async function exportToCSV() {
   
   const storeI = await getStore('inspections');
   const exportData = [];
-
   for (const p of places) {
     const rec = await new Promise(res => {
       if(!date) { res(null); return; }
       const req = storeI.get(`${date}::${p.placeId}`);
       req.onsuccess = () => res(req.result);
     });
-
     const isDone = rec?.status === 'submitted';
     const st = isDone ? 'submitted' : 'pending';
     if (statusFilter !== 'all' && statusFilter !== st) continue;
 
     const row = { '点検日': date || '', '場所名': p.name, '状況': isDone ? '完了' : '未完了' };
-    if (rec?.answers) {
-      Object.entries(rec.answers).forEach(([k, v]) => { row[k] = v; });
-    }
+    if (rec?.answers) Object.entries(rec.answers).forEach(([k, v]) => { row[k] = v; });
     exportData.push(row);
   }
-
   if (exportData.length === 0) { alert('出力対象のデータがありません'); return; }
 
   const allKeys = new Set();
   exportData.forEach(row => Object.keys(row).forEach(k => allKeys.add(k)));
   const headers = Array.from(allKeys);
-
-  const csvContent = [
-    headers.join(','),
-    ...exportData.map(row => headers.map(h => `"${row[h] || ''}"`).join(','))
-  ].join('\n');
-
+  const csvContent = [headers.join(','), ...exportData.map(row => headers.map(h => `"${row[h] || ''}"`).join(','))].join('\n');
   const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
@@ -175,17 +180,12 @@ window.openInspectForm = async (placeId) => {
     row.className = 'form-row'; 
     row.id = `row-${index}`;
     if(index===0) row.classList.add('active-row');
-
     row.onclick = () => {
-      if (!row.classList.contains('active-row')) {
-        document.querySelectorAll('.form-row').forEach(r => r.classList.remove('active-row'));
-        row.classList.add('active-row');
-        row.scrollIntoView({behavior:'smooth', block:'center'});
-      }
+      document.querySelectorAll('.form-row').forEach(r => r.classList.remove('active-row'));
+      row.classList.add('active-row');
+      row.scrollIntoView({behavior:'smooth', block:'center'});
     };
-
     row.innerHTML = `<label style="font-size:16px; font-weight:bold; margin-bottom:10px; display:block;">${item.label}</label>`;
-
     const goToNext = () => {
       row.classList.remove('active-row');
       const next = document.getElementById(`row-${index+1}`);
@@ -197,38 +197,22 @@ window.openInspectForm = async (placeId) => {
       const seg = document.createElement('div'); seg.className = 'segment';
       ['OK', 'NG'].forEach(v => {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'seg-btn'; b.textContent = v;
-        b.onclick = (e) => { 
-          e.stopPropagation(); 
-          seg.querySelectorAll('button').forEach(x => x.classList.remove('active')); 
-          b.classList.add('active'); 
-          seg.dataset.value = v; 
-          setTimeout(goToNext, 250); 
-        };
+        b.onclick = (e) => { e.stopPropagation(); seg.querySelectorAll('button').forEach(x => x.classList.remove('active')); b.classList.add('active'); seg.dataset.value = v; setTimeout(goToNext, 250); };
         seg.appendChild(b);
       });
       seg.dataset.name = item.label; row.appendChild(seg);
-    } 
-    else if (item.inputType === 'select') {
+    } else if (item.inputType === 'select') {
       const listContainer = document.createElement('div');
-      listContainer.className = 'list-options-container'; 
-      listContainer.style.cssText = 'display:flex; flex-direction:column; gap:8px; margin-top:10px;';
+      listContainer.style.display = 'flex'; listContainer.style.flexDirection = 'column'; listContainer.style.gap = '8px';
       item.options.forEach(opt => {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'seg-btn'; b.textContent = opt;
-        b.style.cssText = 'text-align:left; padding:15px; font-size:16px; font-weight:bold;';
-        b.onclick = (e) => {
-          e.stopPropagation();
-          listContainer.querySelectorAll('button').forEach(x => x.classList.remove('active'));
-          b.classList.add('active');
-          listContainer.dataset.value = opt;
-          setTimeout(goToNext, 250);
-        };
+        b.style.textAlign = 'left'; b.style.padding = '15px'; b.style.fontSize = '16px';
+        b.onclick = (e) => { e.stopPropagation(); listContainer.querySelectorAll('button').forEach(x => x.classList.remove('active')); b.classList.add('active'); listContainer.dataset.value = opt; setTimeout(goToNext, 250); };
         listContainer.appendChild(b);
       });
       listContainer.dataset.name = item.label; row.appendChild(listContainer);
-    } 
-    else {
+    } else {
       const inp = document.createElement('input'); inp.name = item.label; inp.type = item.inputType;
-      inp.onclick = (e) => e.stopPropagation();
       inp.onkeypress = (e) => { if(e.key==='Enter'){ e.preventDefault(); goToNext(); }};
       row.appendChild(inp);
     }
@@ -241,13 +225,11 @@ window.openInspectForm = async (placeId) => {
 
 document.getElementById('btn-save').onclick = async () => {
   const answers = {}; const form = document.getElementById('inspect-form');
-  form.querySelectorAll('input, select').forEach(i => answers[i.name] = i.value);
-  form.querySelectorAll('.segment, .list-options-container').forEach(s => {
-    if(s.dataset.name) answers[s.dataset.name] = s.dataset.value || '';
-  });
+  form.querySelectorAll('input').forEach(i => answers[i.name] = i.value);
+  form.querySelectorAll('.segment, [data-name]').forEach(s => { if(s.dataset.name) answers[s.dataset.name] = s.dataset.value || ''; });
   const storeI = await getStore('inspections', 'readwrite');
   await storeI.put({ id: `${state.activeDate}::${state.activePlaceId}`, status: 'submitted', answers, date: state.activeDate });
-  alert('完了'); showScreen('list');
+  alert('保存しました'); showScreen('list');
 };
 
 window.onload = () => {
@@ -256,15 +238,13 @@ window.onload = () => {
   document.getElementById('btn-cancel').onclick = () => showScreen('list');
   document.getElementById('btn-go-map').onclick = () => showScreen('map');
   document.getElementById('btn-export-csv').onclick = exportToCSV;
-  ['filter-type', 'filter-date', 'filter-status'].forEach(id => {
-    const el = document.getElementById(id);
-    if(el) el.onchange = refreshList;
-  });
+  ['filter-type', 'filter-date', 'filter-status'].forEach(id => document.getElementById(id).onchange = refreshList);
   
+  // インポート処理
   document.getElementById('btn-import-master').onclick = async () => {
     const f = document.getElementById('master-file').files[0]; if(!f) return;
     const text = await f.text();
-    const rows = text.split(/\r?\n/).map(row => row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.replace(/^"|"$/g, '').trim()));
+    const rows = text.split(/\r?\n/).map(row => row.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(v => v.replace(/^"|"$/g, '').trim()));
     const storeT = await getStore('types', 'readwrite');
     const map = new Map();
     rows.slice(1).forEach(r => { 
@@ -276,7 +256,7 @@ window.onload = () => {
       map.set(cd, obj); 
     });
     for (const v of map.values()) await storeT.put(v);
-    alert('マスター完了'); location.reload();
+    alert('マスター取込完了'); location.reload();
   };
 
   document.getElementById('btn-import-places').onclick = async () => {
@@ -290,21 +270,25 @@ window.onload = () => {
       p.placeId = hashId(p.typeCd+p.name+p.lat); 
       storeP.put(p); 
     });
-    alert('場所完了');
+    alert('場所データ取込完了'); location.reload();
+  };
+
+  // 削除ボタンのイベント
+  document.getElementById('btn-clear-master').onclick = async () => {
+    if(confirm('マスターと場所を全削除しますか？')) { await clearStore('types'); await clearStore('places'); location.reload(); }
+  };
+  document.getElementById('btn-clear-inspections').onclick = async () => {
+    if(confirm('点検結果を全削除しますか？')) { await clearStore('inspections'); refreshList(); }
   };
 
   openDB().then(db => {
-    const req = db.transaction('types').objectStore('types').getAll();
-    req.onsuccess = () => { 
+    db.transaction('types').objectStore('types').getAll().onsuccess = (e) => { 
       const sel = document.getElementById('filter-type'); 
-      req.result.forEach(t => sel.add(new Option(`${t.typeCd}: ${t.typeName}`, t.typeCd))); 
+      e.target.result.forEach(t => sel.add(new Option(`${t.typeCd}: ${t.typeName}`, t.typeCd))); 
     };
   });
 };
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').then(reg => console.log('SW OK')).catch(err => console.log('SW NG'));
-  });
+  navigator.serviceWorker.register('./sw.js').then(() => console.log('SW OK'));
 }
-
