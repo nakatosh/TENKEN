@@ -3,118 +3,780 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>点検アプリ PWA</title>
-    <link rel="manifest" href="manifest.webmanifest">
-    <meta name="theme-color" content="#2563eb">
-    <link rel="apple-touch-icon" href="icon-192.png">
+    <title>点検 Pro - ナビ連動版</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
-    <link rel="stylesheet" href="style.css">
+    <style>
+        :root { 
+            --primary: #2563eb; 
+            --primary-hover: #1d4ed8;
+            --bg: #f8fafc; 
+            --success: #10b981; 
+            --danger: #ef4444; 
+            --warning: #f59e0b;
+            --text-main: #334155;
+            --text-light: #64748b;
+        }
+        
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; font-family: sans-serif; background: var(--bg); color: var(--text-main); overflow: hidden; }
+
+        /* SPA画面切り替え */
+        .page { display: none; height: 100vh; width: 100vw; overflow-y: auto; padding: 15px; padding-bottom: 80px; }
+        .page.active { display: block; animation: fadeIn 0.3s ease-in-out; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        button, .choice-btn, .final-btn, .card { transition: all 0.2s ease; }
+
+        /* リスト画面のUI */
+        .sticky-top { position: sticky; top: -15px; background: var(--bg); z-index: 100; padding: 10px 0; border-bottom: 1px solid #e2e8f0; }
+        .filter-row { display: flex; gap: 8px; margin: 10px 0; }
+        .filter-btn { flex: 1; padding: 12px 10px; font-size: 14px; border-radius: 8px; border: 1px solid #cbd5e1; background: white; font-weight: bold; color: var(--text-light); cursor: pointer; }
+        .filter-btn.active { background: var(--primary); color: white; border-color: var(--primary); box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2); }
+
+        .card { background: white; padding: 20px; border-radius: 16px; margin-bottom: 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+        .card.is-done { background: #f1f5f9; opacity: 0.8; }
+        .card h3 { margin: 0 0 5px 0; font-size: 18px; }
+        
+        .card-btns { display: flex; gap: 10px; margin-top: 15px; }
+        .card-btn { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #cbd5e1; background: #fff; font-weight: bold; cursor: pointer; color: var(--text-main); text-align: center; }
+        .card-btn.primary { background: var(--primary); color: white; border: none; }
+        .card-btn.danger { background: white; color: var(--danger); border-color: var(--danger); }
+
+        /* フォーム画面のUI */
+        .item-card { background: white; border-radius: 16px; padding: 20px; margin-bottom: 16px; border: 1px solid #e2e8f0; position: relative;}
+        .label-text { font-weight: bold; display: block; margin-bottom: 12px; font-size: 16px; }
+        .choice-row { display: flex; flex-wrap: wrap; gap: 10px; }
+        .choice-btn { flex: 1; min-width: 100px; padding: 15px 10px; border: 2px solid #e2e8f0; border-radius: 12px; background: #f8fafc; font-weight: bold; text-align: center; cursor: pointer; }
+        .choice-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+        
+        .final-btn { flex: 1; padding: 18px; border: 2px solid #e2e8f0; border-radius: 12px; background: white; font-weight: bold; text-align: center; cursor: pointer; font-size: 18px; }
+        .final-btn.active { background: var(--primary); color: white; border-color: var(--primary); transform: scale(1.02); }
+        
+        .manual-in { width: 100%; padding: 15px; border-radius: 10px; border: 2px solid #e2e8f0; font-size: 16px; outline: none; background: white; }
+        .btn-save { width: 100%; height: 60px; border-radius: 30px; background: var(--primary); color: white; border: none; font-size: 20px; font-weight: bold; margin: 20px 0 20px 0; cursor: pointer; box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3); }
+
+        /* 地図画面のUI */
+        #map { width: 100%; height: 100%; }
+        .map-exit { position: absolute; top: 15px; left: 15px; z-index: 2000; background: white; border: none; padding: 12px 24px; border-radius: 25px; font-weight: bold; box-shadow: 0 4px 15px rgba(0,0,0,0.2); cursor: pointer; }
+        .pop-btn { display: block; width: 100%; padding: 12px; margin: 8px 0 0 0; border: none; border-radius: 8px; font-weight: bold; text-align: center; text-decoration: none; cursor: pointer; }
+        .pop-go { background: var(--primary); color: white !important; }
+        .pop-nav { background: var(--success); color: white !important; }
+
+        /* モーダルUI */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 3000; display: flex; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 25px; border-radius: 20px; width: 90%; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); max-height: 90vh; overflow-y: auto;}
+        select.manual-in { appearance: none; background: #fff url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="%23334155" viewBox="0 0 16 16"><path d="M8 11L3 6h10l-5 5z"/></svg>') no-repeat right 15px center; }
+
+        .delete-item-btn { position: absolute; top: 15px; right: 15px; background: #fee2e2; color: var(--danger); border: none; border-radius: 50%; width: 30px; height: 30px; font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; }
+    </style>
+
+<link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
 </head>
 <body>
 
-<header>
-    <div class="wrap">
-        <div style="font-weight:bold; font-size:18px;">点検アプリ</div>
-        <nav>
-            <button data-nav="master" class="active">設定</button>
-            <button data-nav="list">一覧</button>
-        </nav>
+    <div id="modal-new-place" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3 style="margin-top:0;">📍 新規地点の登録</h3>
+            <p style="font-size: 14px; color: var(--text-light); margin-bottom: 15px;">長押しした地点に新しいピンを立てます。</p>
+            <label class="label-text">地点名</label>
+            <input type="text" id="new-place-name" class="manual-in" placeholder="例：街灯A、消火栓B">
+            <label class="label-text" style="margin-top: 15px;">点検種別</label>
+            <select id="new-place-type" class="manual-in"></select>
+            <div style="display: flex; gap: 10px; margin-top: 25px;">
+                <button class="card-btn" onclick="closeNewPlaceModal()">キャンセル</button>
+                <button class="card-btn primary" onclick="saveNewPlace()">登録する</button>
+            </div>
+        </div>
     </div>
-</header>
 
-<main>
-    <section id="screen-master" class="active">
-        <div class="card">
-            <h3>データ取込</h3>
-            <div class="row">
-                <div>
-                    <label>項目マスタ (CSV)</label>
-                    <input type="file" id="master-file" accept=".csv">
-                    <button class="btn primary" id="btn-import-master" style="margin-top:8px; width:100%;">項目マスタ取込</button>
-                </div>
-                <div>
-                    <label>点検データ (CSV)</label>
-                    <input type="file" id="places-file" accept=".csv">
-                    <button class="btn primary" id="btn-import-places" style="margin-top:8px; width:100%;">点検データ取込</button>
-                </div>
+    <div id="page-list" class="page active">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
+            <h2 style="margin:0; font-size: 24px;">点検リスト <span id="count" style="font-size:16px;"></span></h2>
+            <button onclick="showPage('page-master')" style="background:#e2e8f0; border:none; padding:10px 15px; border-radius:10px; font-weight:bold;">設定 ⚙️</button>
+        </div>
+        
+        <div class="sticky-top">
+            <input type="text" id="q-text" placeholder="名前やコードで検索..." oninput="renderList()" class="manual-in" style="padding: 12px; margin-bottom: 5px;">
+            <select id="f-type-filter" class="manual-in" onchange="renderList()" style="padding: 12px; margin-bottom: 5px;">
+                <option value="">すべての種別を表示</option>
+            </select>
+            <div class="filter-row">
+                <button class="filter-btn active" id="f-all" onclick="setFilter('all')">すべて</button>
+                <button class="filter-btn" id="f-none" onclick="setFilter('none')">未完了</button>
+                <button class="filter-btn" id="f-done" onclick="setFilter('done')">完了</button>
             </div>
-            <p style="font-size:12px; color:var(--gray);">※取込後、自動的にリロードされます。</p>
-        </div>
-
-        <div class="card" style="border-color: #fee2e2;">
-            <h3 style="color: #dc2626;">データメンテナンス</h3>
-            <div class="row">
-                <button class="btn" id="btn-clear-master" style="color: #dc2626; border-color: #fecaca;">マスタ・点検データを全削除</button>
-                <button class="btn" id="btn-clear-inspections" style="color: #dc2626; border-color: #fecaca;">点検データのみ全削除</button>
+            
+            <div style="display: flex; gap: 10px;">
+                <button class="btn-save" style="flex:1; height:45px; border-radius:12px; background:#475569; font-size: 14px; margin:0; box-shadow:none;" onclick="showFilteredOnMap()">🗺️ 地図で見る</button>
+                <button class="btn-save" style="flex:1; height:45px; border-radius:12px; background:var(--success); font-size: 14px; margin:0; box-shadow:none;" onclick="exportFilteredCSV()">⬇️ CSV出力</button>
             </div>
-            <p style="font-size:12px; color:var(--gray);">※削除したデータは元に戻せません。</p>
         </div>
-    </section>
+        <div id="list-container" style="margin-top:15px;"></div>
+    </div>
 
-    <section id="screen-list">
-        <div class="card">
-            <div class="row">
-                <div>
-                    <label>点検種別</label>
-                    <select id="filter-type">
-                        <option value="">選択してください</option>
-                    </select>
-                </div>
-                <div>
-                    <label>点検日</label>
-                    <input type="date" id="filter-date">
-                </div>
-                <div>
-                    <label>状況</label>
-                    <select id="filter-status">
-                        <option value="all">すべて</option>
-                        <option value="pending">未完了</option>
-                        <option value="submitted">完了</option>
-                    </select>
-                </div>
+    <div id="page-form" class="page">
+        <button onclick="goBack()" style="font-weight:bold; border:none; background:none; padding:10px 0; font-size:16px;">◀ 戻る</button>
+        <h1 id="f-name" style="margin:5px 0 20px 0; font-size:24px; color: var(--primary);"></h1>
+        <div id="f-items"></div>
+        <div class="item-card">
+            <span class="label-text">📍 総合判定</span>
+            <div class="choice-row">
+                <div class="final-btn" data-f="final" data-val="良好" onclick="setChoice(this, true)">良好</div>
+                <div class="final-btn" data-f="final" data-val="注意" onclick="setChoice(this, true)">注意</div>
+                <div class="final-btn" data-f="final" data-val="不良" onclick="setChoice(this, true)">不良</div>
             </div>
-            <button class="btn info" id="btn-go-map" style="width:100%; margin-bottom:10px;">地図で確認する</button>
-            <button class="btn" id="btn-export-csv" style="width:100%; margin-bottom:15px; background: #f9fafb;">検索結果をCSV出力</button>
         </div>
+        <button class="btn-save" onclick="saveData()">💾 保存して一覧へ戻る</button>
+    </div>
 
-        <div class="card" style="padding:0;">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>点検箇所</th>
-                        <th>状況</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody id="list-tbody">
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <section id="screen-form">
-        <div style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
-            <button class="btn" id="btn-back-list">← 戻る</button>
-            <h2 id="form-meta" style="margin:0; font-size:16px;"></h2>
-        </div>
-        <div id="inspect-form"></div>
-        <div style="padding:20px; display:flex; gap:10px;">
-            <button class="btn" id="btn-cancel" style="flex:1;">キャンセル</button>
-            <button class="btn primary" id="btn-save" style="flex:2; font-size:18px;">点検完了を保存</button>
-        </div>
-    </section>
-
-    <section id="screen-map">
+    <div id="page-map" class="page" style="padding:0; position:relative;">
+        <button class="map-exit" onclick="showPage('page-list')">◀ 戻る</button>
         <div id="map"></div>
-        <div id="map-ui">
-            <button class="btn primary" onclick="showScreen('list')" style="box-shadow: 0 4px 10px rgba(0,0,0,0.3);">一覧に戻る</button>
-        </div>
-    </section>
-</main>
+    </div>
 
-<script src="app.js"></script>
+    <div id="page-master" class="page">
+        <button onclick="showPage('page-list')" style="font-weight:bold; border:none; background:none; padding:10px 0; font-size:16px;">◀ 戻る</button>
+        <h2 style="margin-top: 0;">データ管理</h2>
+        <div class="item-card">
+            <button class="btn-save" style="height: 50px; margin: 10px 0; font-size: 16px;" onclick="document.getElementById('mIn').click()">1. マスタCSV読込 📁</button>
+            <button class="btn-save" style="height: 50px; margin: 10px 0; font-size: 16px; background: #0ea5e9;" onclick="document.getElementById('pIn').click()">2. 地点リスト読込 📍</button>
+            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+            <button class="btn-save" style="height: 50px; margin: 10px 0; font-size: 16px; background: var(--warning);" onclick="showMasterList()">3. マスタを手動で追加・編集 ✏️</button>
+            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+            <button class="btn-save" onclick="clearAllData()" style="background: white; color: var(--danger); border: 2px solid var(--danger); height: 50px; margin: 0; box-shadow: none; font-size: 16px;">⚠️ 全データ削除</button>
+        </div>
+    </div>
+
+    <div id="page-master-list" class="page">
+        <button onclick="showPage('page-master')" style="font-weight:bold; border:none; background:none; padding:10px 0; font-size:16px;">◀ 戻る</button>
+        <h2 style="margin-top: 0;">マスタ（点検種別）一覧</h2>
+        <button class="btn-save" style="height: 50px; margin: 0 0 15px 0; font-size: 16px; background: var(--success);" onclick="openTypeEdit('')">➕ 新規マスタを作成</button>
+        <div id="master-list-container"></div>
+    </div>
+
+    <div id="page-type-edit" class="page">
+        <button onclick="showPage('page-master-list')" style="font-weight:bold; border:none; background:none; padding:10px 0; font-size:16px;">◀ キャンセル</button>
+        <h2 id="type-edit-title" style="margin-top: 0;">マスタ編集</h2>
+        <div class="item-card">
+            <label class="label-text">種別コード (必須)</label>
+            <input type="text" id="edit-type-cd" class="manual-in" placeholder="例：01, 1">
+            <label class="label-text" style="margin-top: 15px;">点検種類名 (任意)</label>
+            <input type="text" id="edit-type-name" class="manual-in" placeholder="例：受電設備点検、消火栓点検">
+        </div>
+        <h3 style="margin-top: 20px; color: var(--text-main);">点検項目</h3>
+        <div id="edit-items-container"></div>
+        <button class="card-btn primary" style="width: 100%; padding: 15px; margin-bottom: 20px; font-size: 16px;" onclick="addTypeItemUI()">➕ 項目を追加する</button>
+        <button class="btn-save" onclick="saveTypeData()">💾 このマスタを保存</button>
+    </div>
+
+    <input type="file" id="mIn" style="display:none" accept=".csv" onchange="importMaster(this)">
+    <input type="file" id="pIn" style="display:none" accept=".csv" onchange="importPlaces(this)">
+
+<script>
+const DB_NAME = "Insp_V5";
+const today = new Date().toISOString().slice(0, 10); 
+let map; 
+let markerLayer = L.layerGroup(); 
+let currentFilter = 'all'; 
+let lastPage = 'page-list'; 
+let tempLatLng = null;
+
+async function getDB() {
+    return new Promise(r => {
+        const req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = e => {
+            const db = e.target.result;
+            if(!db.objectStoreNames.contains('places')) db.createObjectStore('places', { keyPath: 'placeId' });
+            if(!db.objectStoreNames.contains('types')) db.createObjectStore('types', { keyPath: 'typeCd' });
+            if(!db.objectStoreNames.contains('inspections')) db.createObjectStore('inspections', { keyPath: 'id' });
+        };
+        req.onsuccess = e => r(e.target.result);
+    });
+}
+
+function parseCSV(text) {
+    return text.split(/\r?\n/).filter(l => l.trim()).slice(1).map(line => {
+        const parts = []; let cur = "", inQ = false;
+        for(let i = 0; i < line.length; i++) {
+            const c = line[i];
+            if(c === '"') {
+                if(inQ && line[i+1] === '"') { cur += '"'; i++; } 
+                else { inQ = !inQ; }
+            }
+            else if(c === ',' && !inQ) { parts.push(cur.trim()); cur = ""; }
+            else cur += c;
+        }
+        parts.push(cur.trim()); return parts;
+    });
+}
+
+async function importMaster(input) {
+    const data = parseCSV(await input.files[0].text());
+    const db = await getDB();
+    const typesMap = {};
+    data.forEach(c => {
+        const cd = c[0]; 
+        if(!cd) return;
+        const name = c[1] ? c[1] : ""; 
+        if(!typesMap[cd]) typesMap[cd] = { typeCd: cd, typeName: name, items: [] };
+        let opts = (c[3] === "4") ? ["OK", "NG"] : c.slice(5).join(',').split(/[/,，、]/).map(s => s.trim()).filter(x => x);
+        typesMap[cd].items.push({ label: c[2], inputType: c[3], options: opts });
+    });
+    const tx = db.transaction('types', 'readwrite');
+    Object.values(typesMap).forEach(o => tx.objectStore('types').put(o));
+    tx.oncomplete = () => { 
+        alert("マスタの読み込み完了！"); 
+        input.value = ""; 
+        updateTypeFilterDropdown(); 
+    };
+}
+
+async function importPlaces(input) {
+    const data = parseCSV(await input.files[0].text());
+    const db = await getDB();
+    const tx = db.transaction('places', 'readwrite');
+    data.forEach((c, i) => {
+        if(c[0] && c[1] && c[2]) {
+            tx.objectStore('places').put({ placeId: "p" + Date.now() + i, typeCd: c[0], lat: parseFloat(c[1]), lng: parseFloat(c[2]), name: c[3] });
+        }
+    });
+    tx.oncomplete = () => { renderList(); alert("地点リスト読み込み完了！"); input.value = ""; };
+}
+
+async function updateTypeFilterDropdown() {
+    const db = await getDB();
+    const types = await new Promise(r => db.transaction('types').objectStore('types').getAll().onsuccess = e => r(e.target.result));
+    
+    const select = document.getElementById('f-type-filter');
+    select.innerHTML = '<option value="">すべての種別を表示</option>';
+    
+    const modalSelect = document.getElementById('new-place-type');
+    modalSelect.innerHTML = types.length === 0 ? '<option value="">(先にマスタを読み込んでください)</option>' : '';
+
+    types.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.typeCd; 
+        if (t.typeName) {
+            opt.textContent = `種別コード: ${t.typeCd} - ${t.typeName}`;
+        } else {
+            opt.textContent = `種別コード: ${t.typeCd}`;
+        }
+        select.appendChild(opt.cloneNode(true));
+        modalSelect.appendChild(opt);
+    });
+}
+
+function setFilter(filterType) {
+    currentFilter = filterType;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('f-' + filterType).classList.add('active');
+    renderList(); 
+}
+
+function isMatchFilters(p, rec, q, selectedType) {
+    if(currentFilter === 'done' && !rec) return false;
+    if(currentFilter === 'none' && rec) return false;
+    if(selectedType !== "" && p.typeCd.toString() !== selectedType) return false;
+    if(!p.name.toLowerCase().includes(q) && !p.typeCd.toString().includes(q)) return false;
+    return true;
+}
+
+async function renderList() {
+    const q = document.getElementById('q-text').value.toLowerCase(); 
+    const selectedType = document.getElementById('f-type-filter').value;
+    
+    const db = await getDB();
+    const places = await new Promise(r => db.transaction('places').objectStore('places').getAll().onsuccess = e => r(e.target.result));
+    const container = document.getElementById('list-container');
+    container.innerHTML = ""; 
+    let count = 0;
+    
+    for (const p of places) {
+        const rec = await new Promise(r => db.transaction('inspections').objectStore('inspections').get(`${today}::${p.placeId}`).onsuccess = e => r(e.target.result));
+        
+        if (!isMatchFilters(p, rec, q, selectedType)) continue;
+        
+        count++;
+        const div = document.createElement('div');
+        div.className = `card ${rec ? 'is-done' : ''}`; 
+        div.innerHTML = `
+            <h3>${p.name}</h3><small>コード: ${p.typeCd}</small>
+            <div class="card-btns">
+                <button class="card-btn primary" onclick="lastPage='page-list'; openForm('${p.placeId}', '${p.name}', '${p.typeCd}')">${rec ? '📝 修正' : '▶ 開始'}</button>
+                <button class="card-btn" onclick="openOnMap(${p.lat}, ${p.lng})">🗺️ 地図</button>
+            </div>`;
+        container.appendChild(div);
+    }
+    document.getElementById('count').innerText = `(${count}件)`;
+}
+
+// ==========================================
+// CSV出力（対象の点検種別の項目のみ展開）
+// ==========================================
+async function exportFilteredCSV() {
+    const q = document.getElementById('q-text').value.toLowerCase(); 
+    const selectedType = document.getElementById('f-type-filter').value;
+    
+    // ★追加: 点検種別の選択を必須にする
+    if (selectedType === "") {
+        return alert("CSVを出力するには、上部のドロップダウンから出力したい「種別」を選択してください。");
+    }
+    
+    const db = await getDB();
+    const places = await new Promise(r => db.transaction('places').objectStore('places').getAll().onsuccess = e => r(e.target.result));
+    const typeData = await new Promise(r => db.transaction('types').objectStore('types').get(selectedType).onsuccess = e => r(e.target.result));
+    const inspections = await new Promise(r => db.transaction('inspections').objectStore('inspections').getAll().onsuccess = e => r(e.target.result));
+    
+    if (!typeData) {
+        return alert("選択された種別のマスタデータが見つかりません。");
+    }
+
+    // 現在のリスト画面と同じ条件でフィルタリング
+    const filteredPlaces = [];
+    places.forEach(p => {
+        const rec = inspections.find(i => i.id === `${today}::${p.placeId}`);
+        if (isMatchFilters(p, rec, q, selectedType)) {
+            filteredPlaces.push({ p, rec });
+        }
+    });
+
+    if (filteredPlaces.length === 0) {
+        return alert("出力するデータがありません。");
+    }
+
+    // ★変更: 選択された「対象の点検種別」の項目だけをヘッダーにする
+    const dynamicHeaders = typeData.items ? typeData.items.map(item => item.label) : [];
+
+    // CSVヘッダー（固定項目 ＋ 動的項目）
+    const csvRows = [];
+    csvRows.push(["種別コード", "緯度", "経度", "地点名", "点検日", "総合判定", ...dynamicHeaders]);
+    
+    // データ行の作成
+    filteredPlaces.forEach(item => {
+        const { p, rec } = item;
+        
+        const row = [
+            p.typeCd,
+            p.lat,
+            p.lng,
+            p.name,
+            rec ? today : "未実施",
+            rec ? (rec.status || "") : ""
+        ];
+
+        // 抽出した動的ヘッダーの順序に合わせて、点検結果の値を格納
+        dynamicHeaders.forEach(label => {
+            row.push(rec && rec.vals && rec.vals[label] !== undefined ? rec.vals[label] : "");
+        });
+        
+        csvRows.push(row);
+    });
+
+    // 文字列内のダブルクォーテーションをエスケープしてCSVフォーマット化
+    const csvContent = csvRows.map(row => 
+        row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(',')
+    ).join('\n');
+
+    // BOM付きでBlob化（Excel文字化け対策）
+    const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+    const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    // ダウンロードトリガー（ファイル名に点検種類名を含める）
+    const typeNameText = typeData.typeName ? `_${typeData.typeName}` : `_種別${selectedType}`;
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `点検結果${typeNameText}_${today}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// フォーム関連の処理
+async function openForm(pid, name, cd) {
+    const db = await getDB();
+    const type = await new Promise(r => db.transaction('types').objectStore('types').get(cd).onsuccess = e => r(e.target.result));
+    const rec = await new Promise(r => db.transaction('inspections').objectStore('inspections').get(`${today}::${pid}`).onsuccess = e => r(e.target.result || {}));
+    
+    document.getElementById('f-name').textContent = name;
+    window.currentPid = pid; 
+    const area = document.getElementById('f-items'); area.innerHTML = "";
+    
+    if(type && type.items) {
+        type.items.forEach((item, idx) => {
+            const hasRec = rec.vals && rec.vals[item.label] !== undefined;
+            const savedVal = hasRec ? rec.vals[item.label] : "";
+            
+            const div = document.createElement('div');
+            div.className = "item-card"; div.id = "card-" + idx;
+            div.innerHTML = `<span class="label-text">${item.label}</span>`;
+            
+            if(item.options && item.options.length > 0) {
+                const row = document.createElement('div'); row.className = "choice-row";
+                item.options.forEach((o, oIdx) => {
+                    let isInitialActive = false;
+                    if (!hasRec) {
+                        if (item.inputType === "4" && o === "OK") isInitialActive = true;
+                        else if (item.inputType !== "4" && oIdx === 0) isInitialActive = true;
+                    }
+                    const isActive = hasRec ? (savedVal === o) : isInitialActive;
+                    
+                    const btn = document.createElement('div'); 
+                    btn.className = `choice-btn ${isActive ? 'active' : ''}`;
+                    btn.textContent = o; btn.dataset.f = item.label; btn.dataset.val = o;
+                    btn.onclick = function() { setChoice(this, false, idx); }; 
+                    row.appendChild(btn);
+                });
+                div.appendChild(row);
+            } else {
+                div.innerHTML += `<input type="text" class="manual-in" data-f="${item.label}" value="${savedVal}">`;
+            }
+            area.appendChild(div);
+        });
+    }
+    
+    const fv = rec.status || "良好";
+    document.querySelectorAll('[data-f="final"]').forEach(b => { 
+        b.classList.toggle('active', b.dataset.val === fv); 
+    });
+    
+    showPage('page-form');
+    document.getElementById('page-form').scrollTop = 0;
+}
+
+function setChoice(btn, isFinal, idx) {
+    const f = btn.dataset.f;
+    document.querySelectorAll(`[data-f="${f}"]`).forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if(!isFinal) {
+        setTimeout(() => {
+            const next = document.getElementById('card-' + (idx + 1)) || document.querySelector('.btn-save');
+            if(next) next.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 150);
+    }
+}
+
+async function saveData() {
+    const vals = {};
+    document.querySelectorAll('.choice-btn.active').forEach(b => { if(b.dataset.f !== 'final') vals[b.dataset.f] = b.dataset.val; });
+    document.querySelectorAll('.manual-in').forEach(i => { 
+        if(i.id !== 'q-text' && i.id !== 'f-type-filter' && !i.id.startsWith('new-place') && !i.id.startsWith('edit-')) vals[i.dataset.f] = i.value; 
+    });
+    
+    const finalBtn = document.querySelector('.final-btn.active');
+    if(!finalBtn) return alert("「総合判定」を選んでください");
+    
+    const db = await getDB();
+    await db.transaction('inspections','readwrite').objectStore('inspections').put({ id: `${today}::${window.currentPid}`, status: finalBtn.dataset.val, vals });
+    
+    renderList(); 
+    if(lastPage === 'page-map') { showPage('page-map'); renderMarkers(); } else { showPage('page-list'); }
+}
+
+function goBack() { showPage(lastPage); }
+
+function showPage(p) {
+    document.querySelectorAll('.page').forEach(pg => pg.classList.remove('active'));
+    document.getElementById(p).classList.add('active');
+    
+    if(p === 'page-map') {
+        if(!map) {
+            map = L.map('map', {zoomControl: false}).setView([43.06, 141.35], 10); 
+            const paleLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', { attribution: "地理院タイル" });
+            const photoLayer = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg', { attribution: "地理院タイル" });
+            
+            paleLayer.addTo(map);
+            L.control.layers({ "標準 (ペール)": paleLayer, "航空写真": photoLayer }).addTo(map);
+            markerLayer.addTo(map);
+
+            map.on('contextmenu', function(e) { openNewPlaceModal(e.latlng.lat, e.latlng.lng); });
+        }
+        setTimeout(() => { map.invalidateSize(); }, 400);
+    }
+}
+
+async function renderMarkers(targets = null) {
+    markerLayer.clearLayers(); 
+    const db = await getDB();
+    const list = targets || await new Promise(r => db.transaction('places').objectStore('places').getAll().onsuccess = e => r(e.target.result));
+    
+    for(const p of list) {
+        const rec = await new Promise(r => db.transaction('inspections').objectStore('inspections').get(`${today}::${p.placeId}`).onsuccess = e => r(e.target.result));
+        const color = rec ? '#94a3b8' : '#2563eb';
+        const m = L.circleMarker([p.lat, p.lng], { radius:12, fillColor:color, fillOpacity:0.9, color:'#fff', weight:2 }).addTo(markerLayer);
+        
+        const popupContent = `
+            <div style="min-width:160px;">
+                <b style="font-size:15px; color:#334155; display:block; margin-bottom:10px;">${p.name}</b>
+                <button class="pop-btn pop-go" onclick="lastPage='page-map'; openForm('${p.placeId}', '${p.name}', '${p.typeCd}')">📝 入力を開く</button>
+                <a class="pop-btn pop-nav" href="https://www.google.com/maps/dir/?api=1&destination=$$${p.lat},${p.lng}" target="_blank" rel="noopener noreferrer">🚗 ナビ開始</a>
+            </div>`;
+        m.bindPopup(popupContent);
+    }
+}
+
+function showFilteredOnMap() {
+    lastPage = 'page-list'; showPage('page-map');
+    setTimeout(async () => { 
+        const selectedType = document.getElementById('f-type-filter').value;
+        const q = document.getElementById('q-text').value.toLowerCase(); 
+        const db = await getDB();
+        const places = await new Promise(r => db.transaction('places').objectStore('places').getAll().onsuccess = e => r(e.target.result));
+        
+        const filteredPlaces = [];
+        const inspections = await new Promise(r => db.transaction('inspections').objectStore('inspections').getAll().onsuccess = e => r(e.target.result));
+        
+        places.forEach(p => {
+            const rec = inspections.find(i => i.id === `${today}::${p.placeId}`);
+            if (isMatchFilters(p, rec, q, selectedType)) filteredPlaces.push(p);
+        });
+        
+        renderMarkers(filteredPlaces); 
+    }, 400);
+}
+
+function openOnMap(lat, lng) {
+    lastPage = 'page-list'; showPage('page-map');
+    setTimeout(() => { renderMarkers(); map.setView([lat, lng], 17); }, 400);
+}
+
+async function openNewPlaceModal(lat, lng) {
+    tempLatLng = { lat, lng };
+    document.getElementById('new-place-name').value = ""; 
+    document.getElementById('modal-new-place').style.display = 'flex';
+}
+
+function closeNewPlaceModal() {
+    document.getElementById('modal-new-place').style.display = 'none';
+    tempLatLng = null;
+}
+
+async function saveNewPlace() {
+    const name = document.getElementById('new-place-name').value.trim();
+    const typeCd = document.getElementById('new-place-type').value;
+    
+    if(!name) return alert("地点名を入力してください");
+    if(!typeCd) return alert("点検種別を選択してください");
+    
+    const db = await getDB();
+    const tx = db.transaction('places', 'readwrite');
+    const newPlaceId = "p" + Date.now();
+    tx.objectStore('places').put({ placeId: newPlaceId, typeCd: typeCd, lat: tempLatLng.lat, lng: tempLatLng.lng, name: name });
+    tx.oncomplete = () => {
+        closeNewPlaceModal(); renderMarkers(); renderList();
+        lastPage = 'page-map'; openForm(newPlaceId, name, typeCd);
+    };
+}
+
+async function clearAllData() {
+    if(!confirm("全データを削除しますか？")) return;
+    const db = await getDB();
+    const tx = db.transaction(['places','types','inspections'], 'readwrite');
+    tx.objectStore('places').clear(); tx.objectStore('types').clear(); tx.objectStore('inspections').clear();
+    tx.oncomplete = () => location.reload();
+}
+
+// マスタ手動編集ロジック
+async function showMasterList() {
+    showPage('page-master-list');
+    const db = await getDB();
+    const types = await new Promise(r => db.transaction('types').objectStore('types').getAll().onsuccess = e => r(e.target.result));
+    
+    const container = document.getElementById('master-list-container');
+    container.innerHTML = "";
+
+    if (types.length === 0) {
+        container.innerHTML = "<p style='color: var(--text-light);'>登録されているマスタがありません。</p>";
+        return;
+    }
+
+    types.forEach(t => {
+        const nameDisp = t.typeName ? ` <span style="color:var(--text-light); font-size:14px; font-weight:normal;">- ${t.typeName}</span>` : "";
+        const div = document.createElement('div');
+        div.className = "card";
+        div.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div>
+                    <h3 style="margin-bottom: 5px;">種別コード: ${t.typeCd} ${nameDisp}</h3>
+                    <small style="color: var(--text-light);">設定項目数: ${t.items.length}件</small>
+                </div>
+            </div>
+            <div class="card-btns">
+                <button class="card-btn primary" onclick="openTypeEdit('${t.typeCd}')">✏️ 編集</button>
+                <button class="card-btn danger" onclick="deleteType('${t.typeCd}')">🗑️ 削除</button>
+            </div>
+        `;
+        container.appendChild(div);
+    });
+}
+
+async function openTypeEdit(typeCd) {
+    showPage('page-type-edit');
+    const container = document.getElementById('edit-items-container');
+    container.innerHTML = "";
+    
+    const cdInput = document.getElementById('edit-type-cd');
+    const nameInput = document.getElementById('edit-type-name'); 
+    const title = document.getElementById('type-edit-title');
+
+    if (typeCd) {
+        title.innerText = "マスタ編集";
+        cdInput.value = typeCd;
+        cdInput.disabled = true; 
+        cdInput.style.backgroundColor = "#f1f5f9";
+
+        const db = await getDB();
+        const typeData = await new Promise(r => db.transaction('types').objectStore('types').get(typeCd).onsuccess = e => r(e.target.result));
+        
+        nameInput.value = typeData.typeName || ""; 
+
+        if (typeData && typeData.items) {
+            typeData.items.forEach(item => addTypeItemUI(item));
+        }
+    } else {
+        title.innerText = "新規マスタ作成";
+        cdInput.value = "";
+        cdInput.disabled = false;
+        cdInput.style.backgroundColor = "white";
+        nameInput.value = ""; 
+        
+        addTypeItemUI();
+    }
+}
+
+function addTypeItemUI(itemData = null) {
+    const container = document.getElementById('edit-items-container');
+    const id = "edit-item-" + Date.now() + Math.floor(Math.random() * 100);
+    
+    const label = itemData ? itemData.label : "";
+    const type = itemData ? itemData.inputType : "text"; 
+    const options = itemData && itemData.options ? itemData.options.join(", ") : "";
+
+    const div = document.createElement('div');
+    div.className = "item-card edit-item-card";
+    div.id = id;
+    
+    div.innerHTML = `
+        <button class="delete-item-btn" onclick="document.getElementById('${id}').remove()">×</button>
+        
+        <label class="label-text" style="font-size: 14px; margin-bottom: 5px;">項目名 (例: 外観, 点灯状態)</label>
+        <input type="text" class="manual-in edit-item-label" value="${label}" style="padding: 10px; margin-bottom: 15px;">
+        
+        <label class="label-text" style="font-size: 14px; margin-bottom: 5px;">入力方式</label>
+        <select class="manual-in edit-item-type" style="padding: 10px; margin-bottom: 15px;" onchange="toggleEditOptions('${id}')">
+            <option value="text" ${type !== '4' && type !== 'select' ? 'selected' : ''}>テキスト手入力</option>
+            <option value="4" ${type === '4' ? 'selected' : ''}>OK / NG ボタン</option>
+            <option value="select" ${type !== '4' && options.length > 0 ? 'selected' : ''}>カスタム選択ボタン</option>
+        </select>
+        
+        <div class="edit-item-options-wrapper" style="display: ${type !== '4' && options.length > 0 ? 'block' : 'none'};">
+            <label class="label-text" style="font-size: 14px; margin-bottom: 5px;">選択肢 (カンマ区切り)</label>
+            <input type="text" class="manual-in edit-item-options" value="${options}" placeholder="例: 良い, 普通, 悪い" style="padding: 10px;">
+        </div>
+    `;
+    container.appendChild(div);
+}
+
+function toggleEditOptions(cardId) {
+    const card = document.getElementById(cardId);
+    const type = card.querySelector('.edit-item-type').value;
+    const optionsWrapper = card.querySelector('.edit-item-options-wrapper');
+    
+    if (type === "select") {
+        optionsWrapper.style.display = "block";
+    } else {
+        optionsWrapper.style.display = "none";
+    }
+}
+
+async function saveTypeData() {
+    const cd = document.getElementById('edit-type-cd').value.trim();
+    const typeName = document.getElementById('edit-type-name').value.trim(); 
+    if(!cd) return alert("種別コードを入力してください。");
+
+    const itemCards = document.querySelectorAll('.edit-item-card');
+    const items = [];
+
+    for (let i = 0; i < itemCards.length; i++) {
+        const card = itemCards[i];
+        const label = card.querySelector('.edit-item-label').value.trim();
+        const type = card.querySelector('.edit-item-type').value;
+        
+        if (!label) continue; 
+
+        let itemObj = { label: label, inputType: type, options: [] };
+
+        if (type === "4") {
+            itemObj.options = ["OK", "NG"];
+        } else if (type === "select") {
+            const optStr = card.querySelector('.edit-item-options').value;
+            itemObj.options = optStr.split(/[,、，]/).map(s => s.trim()).filter(x => x);
+            if(itemObj.options.length === 0) {
+                alert(`項目「${label}」の選択肢が入力されていません。`);
+                return;
+            }
+        }
+        items.push(itemObj);
+    }
+
+    if (items.length === 0) {
+        return alert("少なくとも1つ以上の点検項目を入力してください。");
+    }
+
+    const db = await getDB();
+    const tx = db.transaction('types', 'readwrite');
+    tx.objectStore('types').put({ typeCd: cd, typeName: typeName, items: items }); 
+    
+    tx.oncomplete = () => {
+        alert(`種別コード「${cd}」を保存しました！`);
+        updateTypeFilterDropdown();
+        showMasterList(); 
+    };
+}
+
+async function deleteType(typeCd) {
+    if(!confirm(`種別コード「${typeCd}」を削除しますか？\n※既に登録されている地点の表示に影響する場合があります。`)) return;
+    
+    const db = await getDB();
+    const tx = db.transaction('types', 'readwrite');
+    tx.objectStore('types').delete(typeCd);
+    
+    tx.oncomplete = () => {
+        updateTypeFilterDropdown();
+        showMasterList(); 
+    };
+}
+
+// 初期化
+window.onload = async () => {
+    await updateTypeFilterDropdown(); 
+    renderList();
+};
+
+</script>
+
+<script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => {
+                        console.log('ServiceWorker 登録成功:', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('ServiceWorker 登録失敗:', error);
+                    });
+            });
+        }
+    </script>
 </body>
 </html>
