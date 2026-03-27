@@ -1,47 +1,72 @@
-const CACHE_NAME = 'insp-pro-v1';
+const CACHE_NAME = 'inspection-map-v2';
 
-// キャッシュするファイルのリスト（アプリ本体と地図ライブラリ）
 const urlsToCache = [
+  './',
   './index.html',
   './manifest.json',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+
+  // icons
+  './icon-192.png',
+  './icon-512.png',
+  './icon-512-maskable.png',
+
+  // splash
+  './splash.png'
 ];
 
-// インストール時にキャッシュを保存
+/* インストール */
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Opened cache');
-        return cache.addAll(urlsToCache);
-      })
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.addAll(urlsToCache);
+    })
   );
+  self.skipWaiting();
 });
 
-// ネットワークリクエストをフックして、キャッシュがあればそれを返す（オフライン対応）
-self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        // キャッシュにデータがあればそれを返す、なければネットワークへリクエスト
-        return response || fetch(event.request);
-      })
-  );
-});
-
-// 古いキャッシュを削除する処理
+/* アクティベート */
 self.addEventListener('activate', event => {
-  const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
-    caches.keys().then(cacheNames => {
+    caches.keys().then(keys => {
       return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
-            return caches.delete(cacheName);
+        keys.map(key => {
+          if (key !== CACHE_NAME) {
+            return caches.delete(key);
           }
         })
       );
     })
   );
+  self.clients.claim();
 });
+
+/* fetch */
+self.addEventListener('fetch', event => {
+  // ナビゲーションは常にキャッシュ優先
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      caches.match('./index.html').then(res => res || fetch(event.request))
+    );
+    return;
+  }
+
+  // その他は cache-first
+  event.respondWith(
+    caches.match(event.request).then(cached => {
+      return (
+        cached ||
+        fetch(event.request).then(response => {
+          // 同一オリジンのみキャッシュ
+          if (event.request.url.startsWith(self.location.origin)) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put(event.request, clone);
+            });
+          }
+          return response;
+        })
+      );
+    })
+  );
+});
+``
